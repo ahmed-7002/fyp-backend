@@ -1,0 +1,36 @@
+# ---------------------------------------------------------------------------
+# Mental Health Assessment API - Python dependencies
+# Target interpreter: Python 3.11.x or 3.12.x
+# Install with:  pip install -r requirements.txt
+# ---------------------------------------------------------------------------
+
+# --- Web framework -----------------------------------------------------
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.19          # required for UploadFile / form-data frame payloads
+pydantic==2.10.3
+pydantic-settings==2.7.0
+
+# --- Database ------------------------------------------------------------
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10           # PostgreSQL driver (works great with Neon)
+alembic==1.14.0                   # schema migrations
+
+# --- Auth (Clerk JWT verification) ---------------------------------------
+python-jose[cryptography]==3.3.0
+httpx==0.28.1
+
+# --- Computer vision / facial emotion recognition (FER-2013) --------------
+opencv-python-headless==4.10.0.84 # headless build: no GUI deps, safer on servers
+numpy==1.26.4
+tensorflow==2.18.0                # required by the `fer` package below (CPU build)
+fer==22.5.1                        # bundles its own pre-trained FER-2013 model - no training needed
+
+# --- Utilities -------------------------------------------------------------
+python-dotenv==1.0.1
+Pillow==11.0.0
+
+# --- Optional / advanced: only needed if you train your OWN model later ---
+# via training/train_fer_model.py instead of using the bundled `fer` model.
+# scikit-learn==1.5.2
+

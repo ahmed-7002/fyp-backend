@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+app/ml_models/*.h5
+app/ml_models/*.keras
+.DS_Store
