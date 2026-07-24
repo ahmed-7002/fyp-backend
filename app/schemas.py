@@ -74,3 +74,20 @@ class AssessmentSubmitOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Profile / history (list of a user's past sessions)
+# ---------------------------------------------------------------------------
+class AssessmentSummary(BaseModel):
+    """Lightweight row for the profile page's session list - full detail is
+    fetched separately (GET /api/assessments/{id}) only when a session is
+    expanded, so the list itself stays fast even with many past sessions."""
+
+    id: uuid.UUID
+    assessment_mode: Literal["questionnaire", "video", "combined"]
+    final_risk_level: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

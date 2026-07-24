@@ -7,7 +7,13 @@ from app.auth import get_current_user
 from app.data.dass21_questions import DASS21_QUESTIONS, ANSWER_LABELS
 from app.database import get_db
 from app.models import Assessment
-from app.schemas import AssessmentSubmitIn, AssessmentSubmitOut, DassResult, FerResult
+from app.schemas import (
+    AssessmentSubmitIn,
+    AssessmentSubmitOut,
+    AssessmentSummary,
+    DassResult,
+    FerResult,
+)
 from app.services.dass_scoring import score_dass21
 from app.services.risk_engine import compute_overall_risk
 
@@ -92,6 +98,24 @@ def submit_assessment(
         final_summary=record.final_summary,
         created_at=record.created_at,
     )
+
+
+@router.get("/assessments", response_model=list[AssessmentSummary])
+def list_assessments(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+):
+    """Returns every past session for the signed-in user, most recent first.
+    Used by the profile page's history list - full details for any one
+    session are fetched separately via GET /api/assessments/{id} only when
+    the user expands it, so this stays fast regardless of history length."""
+    records = (
+        db.query(Assessment)
+        .filter(Assessment.clerk_user_id == user_id)
+        .order_by(Assessment.created_at.desc())
+        .all()
+    )
+    return records
 
 
 @router.get("/assessments/{assessment_id}", response_model=AssessmentSubmitOut)
