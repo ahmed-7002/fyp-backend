@@ -25,6 +25,7 @@ opencv-python-headless==4.10.0.84 # headless build: no GUI deps, safer on server
 numpy==1.26.4
 tensorflow-cpu==2.18.0             # required by the `fer` package below (CPU build)              # required by the `fer` package below (CPU build)
 fer==22.5.1                        # bundles its own pre-trained FER-2013 model - no training needed
+moviepy==1.0.3
 
 # --- Utilities -------------------------------------------------------------
 python-dotenv==1.0.1
