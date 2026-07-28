@@ -23,14 +23,16 @@ httpx==0.28.1
 # --- Computer vision / facial emotion recognition (FER-2013) --------------
 opencv-python-headless==4.10.0.84 # headless build: no GUI deps, safer on servers
 numpy==1.26.4
-tensorflow-cpu==2.18.0             # required by the `fer` package below (CPU build)
-fer==22.5.1                        # bundles its own pre-trained FER-2013 model - no training needed
-moviepy==1.0.3
-setuptools<81                      # newer setuptools removed pkg_resources, which fer/moviepy still need
+tensorflow==2.18.0                # required by the `fer` package below (CPU build)
+fer==22.5.1                     # bundles its own pre-trained FER-2013 model - no training needed
 
 # --- Utilities -------------------------------------------------------------
 python-dotenv==1.0.1
 Pillow==11.0.0
+
+# --- Text-to-speech fallback (only used when the visitor's browser has no
+# native voice for the selected language - see app/routers/tts.py) ---------
+gTTS==2.5.4
 
 # --- Optional / advanced: only needed if you train your OWN model later ---
 # via training/train_fer_model.py instead of using the bundled `fer` model.

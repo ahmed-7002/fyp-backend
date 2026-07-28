@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import Base, engine
-from app.routers import assessment, fer
+from app.routers import assessment, fer, tts
 
 settings = get_settings()
 
@@ -26,6 +26,7 @@ app.add_middleware(
 
 app.include_router(assessment.router)
 app.include_router(fer.router)
+app.include_router(tts.router)
 
 
 @app.on_event("startup")
