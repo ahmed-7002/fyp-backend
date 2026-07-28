@@ -26,6 +26,7 @@ numpy==1.26.4
 tensorflow==2.18.0                # required by the `fer` package below (CPU build)
 fer==22.5.1                     # bundles its own pre-trained FER-2013 model - no training needed
 moviepy==1.0.3                       # optional: only needed if you want to process video files
+setuptools<82
 
 # --- Utilities -------------------------------------------------------------
 python-dotenv==1.0.1
