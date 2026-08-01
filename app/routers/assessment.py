@@ -38,15 +38,7 @@ def submit_assessment(
         raise HTTPException(403, "clerk_user_id does not match authenticated user")
 
     needs_dass = payload.assessment_mode in ("questionnaire", "combined")
-    # Video-only mode always requires a completed video result. Combined
-    # mode treats fer_result as best-effort rather than mandatory: the
-    # questionnaire and background video capture now run concurrently
-    # (see CombinedAssessmentFlow.jsx), and the video half can legitimately
-    # come back empty - denied camera permission, too few frames captured
-    # before the questionnaire finished, or the camera disconnecting
-    # mid-session. In any of those cases the session should still save as
-    # a valid (DASS-only) result rather than being rejected outright.
-    needs_fer = payload.assessment_mode == "video"
+    needs_fer = payload.assessment_mode in ("video", "combined")
 
     if needs_dass and not payload.dass_answers:
         raise HTTPException(400, "dass_answers is required for this assessment mode")
