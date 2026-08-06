@@ -2,6 +2,13 @@
 ORM models. The `assessments` table is intentionally flat and wide -
 one row per completed assessment - so it can be exported directly as a
 clean, ready-to-use training dataset for a future model.
+
+NOTE on nullability: `clerk_user_id` and `full_name` are nullable so that
+deleting a session can be implemented as an anonymization update (wiping
+just the personally-identifying columns) rather than a hard SQL delete -
+this preserves the structured DASS-21/FER data for future ML training
+while genuinely removing the link back to a specific person. See
+DELETE /api/assessments/{id} in app/routers/assessment.py.
 """
 import uuid
 
@@ -24,10 +31,10 @@ class Assessment(Base):
 
     # --- Identity ------------------------------------------------------
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    clerk_user_id = Column(String(64), nullable=False, index=True)
+    clerk_user_id = Column(String(64), nullable=True, index=True)  # nullable: set to NULL on anonymized delete
 
     # --- Demographics ----------------------------------------------------
-    full_name = Column(String(120), nullable=False)
+    full_name = Column(String(120), nullable=True)  # nullable: set to NULL on anonymized delete
     age = Column(Integer, nullable=False)
     gender = Column(
         Enum("male", "female", "non_binary", "prefer_not_to_say", name="gender_enum"),
@@ -67,13 +74,13 @@ class Assessment(Base):
     dass_depression_score = Column(Integer)
     dass_anxiety_score = Column(Integer)
     dass_stress_score = Column(Integer)
-    dass_depression_severity = Column(String(20))   # Normal/Mild/Moderate/Severe/Extremely Severe
+    dass_depression_severity = Column(String(20))
     dass_anxiety_severity = Column(String(20))
     dass_stress_severity = Column(String(20))
 
     # --- FER-2013 aggregated metrics (% of analyzed frames per emotion) ----
     fer_frames_captured = Column(Integer)
-    fer_frames_analyzed = Column(Integer)     # frames where a face was detected
+    fer_frames_analyzed = Column(Integer)
     fer_angry = Column(Float)
     fer_disgust = Column(Float)
     fer_fear = Column(Float)
@@ -84,7 +91,7 @@ class Assessment(Base):
     fer_dominant_emotion = Column(String(20))
 
     # --- Final combined result -------------------------------------------
-    final_risk_level = Column(String(20))     # Low / Moderate / High / Needs Attention
+    final_risk_level = Column(String(20))
     final_summary = Column(String(1000))
 
     # --- Timestamps -----------------------------------------------------

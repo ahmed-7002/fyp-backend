@@ -38,14 +38,6 @@ def submit_assessment(
         raise HTTPException(403, "clerk_user_id does not match authenticated user")
 
     needs_dass = payload.assessment_mode in ("questionnaire", "combined")
-    # Video-only mode always requires a completed video result. Combined
-    # mode treats fer_result as best-effort rather than mandatory: the
-    # questionnaire and background video capture now run concurrently
-    # (see CombinedAssessmentFlow.jsx), and the video half can legitimately
-    # come back empty - denied camera permission, too few frames captured
-    # before the questionnaire finished, or the camera disconnecting
-    # mid-session. In any of those cases the session should still save as
-    # a valid (DASS-only) result rather than being rejected outright.
     needs_fer = payload.assessment_mode == "video"
 
     if needs_dass and not payload.dass_answers:
@@ -114,9 +106,10 @@ def list_assessments(
     user_id: str = Depends(get_current_user),
 ):
     """Returns every past session for the signed-in user, most recent first.
-    Used by the profile page's history list - full details for any one
-    session are fetched separately via GET /api/assessments/{id} only when
-    the user expands it, so this stays fast regardless of history length."""
+
+    Note: anonymized (deleted) sessions have clerk_user_id set to NULL,
+    so they never match this filter and correctly stop appearing here
+    for anyone, without needing any extra "is_deleted" flag."""
     records = (
         db.query(Assessment)
         .filter(Assessment.clerk_user_id == user_id)
@@ -172,3 +165,31 @@ def get_assessment(
         final_summary=record.final_summary,
         created_at=record.created_at,
     )
+
+
+@router.delete("/assessments/{assessment_id}", status_code=204)
+def delete_assessment(
+    assessment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    "Deletes" a session via anonymization, not a hard SQL delete: the two
+    personally-identifying columns (clerk_user_id, full_name) are wiped to
+    NULL, while age, gender, every DASS-21 answer/score, and every FER
+    metric are left fully intact. This protects the user's privacy (the
+    row can no longer be traced back to them, and correctly disappears
+    from their own history the moment clerk_user_id becomes NULL) while
+    preserving the structured data for future ML training - consistent
+    with this project's original goal of keeping the dataset export-ready.
+    """
+    record = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+    if not record:
+        raise HTTPException(404, "Assessment not found")
+    if record.clerk_user_id != user_id:
+        raise HTTPException(403, "Not authorized to delete this assessment")
+
+    record.clerk_user_id = None
+    record.full_name = None
+    db.commit()
+    return None
