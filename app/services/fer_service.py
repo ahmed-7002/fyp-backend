@@ -9,8 +9,8 @@ or the database needs to change.
 
 Pipeline per frame:
   1. Decode the incoming JPEG bytes into an OpenCV BGR image.
-  2. Hand the frame to `fer`, which detects the face (OpenCV Haar Cascade
-     by default) and returns a softmax-style probability for each of the
+  2. Hand the frame to `fer`, which detects the face (using TensorFlow MTCNN
+     for high accuracy) and returns a softmax-style probability for each of the
      7 emotions.
   3. Aggregate the per-frame predictions across the whole batch (150-160
      frames) into one averaged result.
@@ -53,16 +53,16 @@ def _get_detector():
     try:
         from fer import FER
 
-        # mtcnn=False uses OpenCV's Haar Cascade face detector (fast,
-        # CPU-only, no extra native deps). Set mtcnn=True for a more
-        # accurate but slower/heavier face detector if needed.
-        detector = FER(mtcnn=False)
-        logger.info("FER detector initialized (pre-trained model bundled with the `fer` package)")
+        # mtcnn=True uses the highly accurate TensorFlow MTCNN face detector 
+        # instead of the default OpenCV Haar Cascade. This dramatically improves
+        # the frames_analyzed vs frames_captured ratio.
+        detector = FER(mtcnn=True)
+        logger.info("FER detector initialized (pre-trained model bundled with the `fer` package using MTCNN)")
         return detector
     except Exception as exc:  # noqa: BLE001 - intentionally broad, see error message below
         raise ModelNotAvailableError(
             "Could not initialize the FER emotion detector. Make sure the "
-            "`fer` package is installed (pip install fer). "
+            "`fer`, `mtcnn`, and `tensorflow` packages are installed. "
             f"Original error: {exc}"
         ) from exc
 
