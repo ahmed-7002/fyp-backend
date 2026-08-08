@@ -15,7 +15,7 @@ from app.schemas import (
     FerResult,
 )
 from app.services.dass_scoring import score_dass21
-from app.services.risk_engine import compute_overall_risk
+from app.services.risk_engine import compute_overall_risk, generate_actionable_tips
 
 router = APIRouter(prefix="/api", tags=["assessment"])
 
@@ -51,7 +51,11 @@ def submit_assessment(
 
     fer_result: FerResult | None = payload.fer_result
 
-    risk_level, summary = compute_overall_risk(dass_result, fer_result)
+    # compute_overall_risk now returns a 3-tuple - risk level, summary, and
+    # the rule-based bilingual tips generated from these same DASS/FER
+    # values. Tips are NOT stored on `record` below and NOT part of
+    # models.py/schema.sql - they're only ever attached to the API response.
+    risk_level, summary, tips = compute_overall_risk(dass_result, fer_result)
 
     record = Assessment(
         id=uuid.uuid4(),
@@ -96,6 +100,7 @@ def submit_assessment(
         fer_result=fer_result,
         final_risk_level=record.final_risk_level,
         final_summary=record.final_summary,
+        actionable_tips=tips,
         created_at=record.created_at,
     )
 
@@ -157,12 +162,20 @@ def get_assessment(
             dominant_emotion=record.fer_dominant_emotion,
         )
 
+    # Tips aren't stored - they're recomputed here from the same saved
+    # DASS/FER numbers, using the standalone helper directly rather than
+    # compute_overall_risk() (which would needlessly recompute
+    # final_risk_level/final_summary, both of which are already stored on
+    # `record` and read directly below).
+    tips = generate_actionable_tips(dass_result, fer_result)
+
     return AssessmentSubmitOut(
         id=record.id,
         dass_result=dass_result,
         fer_result=fer_result,
         final_risk_level=record.final_risk_level,
         final_summary=record.final_summary,
+        actionable_tips=tips,
         created_at=record.created_at,
     )
 
@@ -177,11 +190,7 @@ def delete_assessment(
     "Deletes" a session via anonymization, not a hard SQL delete: the two
     personally-identifying columns (clerk_user_id, full_name) are wiped to
     NULL, while age, gender, every DASS-21 answer/score, and every FER
-    metric are left fully intact. This protects the user's privacy (the
-    row can no longer be traced back to them, and correctly disappears
-    from their own history the moment clerk_user_id becomes NULL) while
-    preserving the structured data for future ML training - consistent
-    with this project's original goal of keeping the dataset export-ready.
+    metric are left fully intact.
     """
     record = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not record:
