@@ -51,11 +51,24 @@ def submit_assessment(
 
     fer_result: FerResult | None = payload.fer_result
 
+    # Age and gender both come straight from the onboarding step of the
+    # submission payload (the same values that already get persisted onto
+    # the Assessment record below) - there's no separate lookup needed
+    # since the user provides both as part of every submission. Age is cast
+    # defensively in case it ever arrives as a numeric string from an older
+    # client; gender is passed through as-is (risk_engine normalises it,
+    # and treats "Prefer not to say" / anything unrecognised as unknown).
+    age: int | None = int(payload.age) if payload.age is not None else None
+    gender: str | None = payload.gender
+
     # compute_overall_risk now returns a 3-tuple - risk level, summary, and
     # the rule-based bilingual tips generated from these same DASS/FER
-    # values. Tips are NOT stored on `record` below and NOT part of
-    # models.py/schema.sql - they're only ever attached to the API response.
-    risk_level, summary, tips = compute_overall_risk(dass_result, fer_result)
+    # values plus age and gender. Tips are NOT stored on `record` below and
+    # NOT part of models.py/schema.sql - they're only ever attached to the
+    # API response. Neither `age` nor `gender` ever affects
+    # final_risk_level/final_summary - both only affect tip WORDING (see
+    # risk_engine.py docstring).
+    risk_level, summary, tips = compute_overall_risk(dass_result, fer_result, age, gender)
 
     record = Assessment(
         id=uuid.uuid4(),
@@ -162,12 +175,19 @@ def get_assessment(
             dominant_emotion=record.fer_dominant_emotion,
         )
 
+    # Age and gender are both read directly off the already-persisted
+    # record (they were stored at submission time above, straight from the
+    # onboarding payload) - no extra lookup against the auth/user object is
+    # needed here either.
+    age: int | None = record.age
+    gender: str | None = record.gender
+
     # Tips aren't stored - they're recomputed here from the same saved
-    # DASS/FER numbers, using the standalone helper directly rather than
-    # compute_overall_risk() (which would needlessly recompute
+    # DASS/FER/age/gender values, using the standalone helper directly
+    # rather than compute_overall_risk() (which would needlessly recompute
     # final_risk_level/final_summary, both of which are already stored on
     # `record` and read directly below).
-    tips = generate_actionable_tips(dass_result, fer_result)
+    tips = generate_actionable_tips(dass_result, fer_result, age, gender)
 
     return AssessmentSubmitOut(
         id=record.id,
@@ -191,6 +211,11 @@ def delete_assessment(
     personally-identifying columns (clerk_user_id, full_name) are wiped to
     NULL, while age, gender, every DASS-21 answer/score, and every FER
     metric are left fully intact.
+
+    Note: `age` and `gender` are deliberately kept (not wiped) here, same
+    as before - this means tip generation for an anonymized session still
+    tailors by age/gender if it's ever re-viewed, since neither is
+    personally identifying in the way clerk_user_id/full_name are.
     """
     record = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not record:
