@@ -24,9 +24,8 @@ httpx==0.28.1
 opencv-python-headless==4.10.0.84 # headless build: no GUI deps, safer on servers
 numpy==1.26.4
 tensorflow==2.18.0                # required by the `fer` package below (CPU build)
-mtcnn==1.0.0                      # deep learning face detector for higher accuracy
-fer==22.5.1                       # bundles its own pre-trained FER-2013 model - no training needed
-moviepy==1.0.3                    # optional: only needed if you want to process video files
+fer==22.5.1                     # bundles its own pre-trained FER-2013 model - no training needed
+moviepy==1.0.3                       # optional: only needed if you want to process video files
 setuptools<82
 
 # --- Utilities -------------------------------------------------------------
