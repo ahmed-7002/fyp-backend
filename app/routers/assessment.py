@@ -20,6 +20,26 @@ from app.services.risk_engine import compute_overall_risk, generate_actionable_t
 router = APIRouter(prefix="/api", tags=["assessment"])
 
 
+def _build_response(
+    record: Assessment,
+    dass_result: DassResult | None,
+    fer_result: FerResult | None,
+    tips: list[dict],
+) -> AssessmentSubmitOut:
+    """Shared response shape for both POST /api/assessments (fresh
+    submission) and GET /api/assessments/{id} (re-viewed later) - was
+    previously duplicated identically in both endpoints."""
+    return AssessmentSubmitOut(
+        id=record.id,
+        dass_result=dass_result,
+        fer_result=fer_result,
+        final_risk_level=record.final_risk_level,
+        final_summary=record.final_summary,
+        actionable_tips=tips,
+        created_at=record.created_at,
+    )
+
+
 @router.get("/dass21/questions")
 def get_questions():
     return {
@@ -74,8 +94,12 @@ def submit_assessment(
         id=uuid.uuid4(),
         clerk_user_id=payload.clerk_user_id,
         full_name=payload.full_name,
-        age=payload.age,
-        gender=payload.gender,
+        # Use the same normalised `age`/`gender` locals that were just fed
+        # into compute_overall_risk() above, not payload.age/payload.gender
+        # directly - keeps what's persisted and what generated these tips
+        # identical, including the defensive int-cast on age.
+        age=age,
+        gender=gender,
         assessment_mode=payload.assessment_mode,
         final_risk_level=risk_level,
         final_summary=summary,
@@ -107,15 +131,7 @@ def submit_assessment(
     db.commit()
     db.refresh(record)
 
-    return AssessmentSubmitOut(
-        id=record.id,
-        dass_result=dass_result,
-        fer_result=fer_result,
-        final_risk_level=record.final_risk_level,
-        final_summary=record.final_summary,
-        actionable_tips=tips,
-        created_at=record.created_at,
-    )
+    return _build_response(record, dass_result, fer_result, tips)
 
 
 @router.get("/assessments", response_model=list[AssessmentSummary])
@@ -189,15 +205,7 @@ def get_assessment(
     # `record` and read directly below).
     tips = generate_actionable_tips(dass_result, fer_result, age, gender)
 
-    return AssessmentSubmitOut(
-        id=record.id,
-        dass_result=dass_result,
-        fer_result=fer_result,
-        final_risk_level=record.final_risk_level,
-        final_summary=record.final_summary,
-        actionable_tips=tips,
-        created_at=record.created_at,
-    )
+    return _build_response(record, dass_result, fer_result, tips)
 
 
 @router.delete("/assessments/{assessment_id}", status_code=204)

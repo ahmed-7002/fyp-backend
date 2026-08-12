@@ -40,6 +40,14 @@ individual reading it. "Prefer not to say" and unrecognised/missing values
 are treated identically to "unknown": no gender-specific tip is generated,
 since guessing at content for someone who explicitly declined to share
 would be inappropriate.
+
+TIP-WRITING STYLE RULE (v2): every tip is 1-2 short sentences - name the
+technique, give the one concrete action, and (for High-tier DASS tips)
+a brief, direct nudge toward professional support. No extended empathetic
+preamble, no explanation of *why* the technique works beyond a few words.
+This is a deliberate choice: someone screening for elevated depression,
+anxiety, or stress is a reader who benefits from something short and clear
+to act on, not a paragraph to parse.
 """
 from typing import Optional
 
@@ -83,10 +91,16 @@ def _age_bracket(age: Optional[int]) -> Optional[str]:
     return "senior"
 
 
-# Accepts the exact labels used on the onboarding form ("Female", "Male",
-# "Non-binary", "Prefer not to say") plus a few common variants, and
-# normalises everything else (including "Prefer not to say", blanks, and
-# anything unrecognised) to None.
+# Accepts the exact enum values stored in the database / sent by the
+# frontend (see models.py gender_enum and schemas.py's Literal:
+# "male" | "female" | "non_binary" | "prefer_not_to_say") plus a few
+# common human-typed variants, and normalises everything else (including
+# "prefer_not_to_say", blanks, and anything unrecognised) to None.
+#
+# "non_binary" (underscore) is the ACTUAL value this app ever sends - it's
+# the literal enum member, not free text - so it must be a dict key here,
+# not just the hyphen/space variants below. Without it, every non-binary
+# user's gender silently normalised to None and never got a gender tip.
 _GENDER_ALIASES = {
     "male": "male",
     "m": "male",
@@ -94,6 +108,7 @@ _GENDER_ALIASES = {
     "female": "female",
     "f": "female",
     "woman": "female",
+    "non_binary": "nonbinary",  # the actual enum value (models.py / schemas.py)
     "non-binary": "nonbinary",
     "nonbinary": "nonbinary",
     "non binary": "nonbinary",
@@ -223,129 +238,74 @@ def _depression_tips(severity: str, bracket: Optional[str]) -> list[dict]:
     if severity in _MILD_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "It's completely understandable to feel weighed down right now - "
-                      "many students carry this quietly while comparing themselves to "
-                      "curated highlight reels online. Try a CBT technique called "
-                      "'behavioural activation': pick one tiny, concrete action today "
-                      "(texting one friend, a 10-minute walk between classes) and do "
-                      "it BEFORE you feel motivated, not after - motivation usually "
-                      "follows action, not the other way around.",
-                "ur": "ابھی خود کو بوجھل محسوس کرنا بالکل قابلِ فہم ہے - بہت سے طلبہ "
-                      "خاموشی سے یہ بوجھ اٹھاتے ہیں جبکہ سوشل میڈیا پر دوسروں کی سجی "
-                      "سنوری زندگیوں سے اپنا موازنہ کرتے رہتے ہیں۔ CBT کی ایک تکنیک "
-                      "'رویاتی فعالیت' آزمائیں: آج کے لیے ایک نہایت چھوٹا اور ٹھوس "
-                      "قدم چنیں (کسی دوست کو پیغام بھیجنا، کلاسوں کے درمیان 10 منٹ کی "
-                      "واک) اور حوصلہ آنے سے پہلے ہی وہ کام کریں - عام طور پر پہلے "
-                      "عمل ہوتا ہے، پھر حوصلہ آتا ہے، الٹا نہیں۔",
+                "en": "Try 'behavioural activation': do one small action today "
+                      "(message a friend, a short walk) before you feel like it - "
+                      "motivation follows action, not the other way around.",
+                "ur": "'رویاتی فعالیت' آزمائیں: حوصلہ آنے سے پہلے ہی آج کوئی ایک "
+                      "چھوٹا کام کریں (دوست کو پیغام، مختصر واک) - عمل حوصلے سے پہلے "
+                      "آتا ہے۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "Low mood alongside a full plate of work and relationship "
-                      "responsibilities is exhausting, and it's not a personal "
-                      "failing. Try 'behavioural activation': write down everything "
-                      "pulling at you, then commit to just ONE small physical action "
-                      "today, unrelated to output or productivity - a short walk, "
-                      "cooking a real meal, calling one person. Completing it gives "
-                      "your brain real evidence that you can still act, even when "
-                      "motivation is low.",
-                "ur": "کام اور تعلقات کی مکمل ذمہ داریوں کے ساتھ اداسی محسوس کرنا "
-                      "تھکا دینے والا ہے، اور یہ آپ کی کوئی ذاتی کمزوری نہیں۔ "
-                      "'رویاتی فعالیت' آزمائیں: جو کچھ بھی آپ کو پریشان کر رہا ہے اسے "
-                      "لکھ لیں، پھر آج کے لیے صرف ایک چھوٹے جسمانی عمل کا عہد کریں، "
-                      "جس کا کارکردگی یا پیداوار سے تعلق نہ ہو - مختصر واک، حقیقی کھانا "
-                      "پکانا، کسی ایک شخص کو کال کرنا۔ اسے مکمل کرنا دماغ کو یہ ثبوت "
-                      "دیتا ہے کہ حوصلہ کم ہونے پر بھی آپ عمل کر سکتے ہیں۔",
+                "en": "Try 'behavioural activation': commit to one small action "
+                      "today that isn't about productivity - a walk, a real meal, "
+                      "or one phone call.",
+                "ur": "'رویاتی فعالیت' آزمائیں: آج کارکردگی سے ہٹ کر ایک چھوٹا کام "
+                      "کریں - واک، اچھا کھانا، یا کسی کو کال۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "Mood and the body are closely linked, and this becomes more "
-                      "noticeable with age. Try 'behavioural activation' in its "
-                      "gentlest form: choose one small, pleasurable action for today "
-                      "- ten minutes of morning sunlight, tending a plant, or "
-                      "preparing a favourite small meal - and do it regardless of "
-                      "how you feel beforehand. Small completed actions rebuild a "
-                      "sense of agency that low mood tends to erode.",
-                "ur": "مزاج اور جسم کا آپس میں گہرا تعلق ہے، اور عمر بڑھنے کے ساتھ یہ "
-                      "زیادہ نمایاں ہو جاتا ہے۔ 'رویاتی فعالیت' کو اس کی نرم ترین شکل "
-                      "میں آزمائیں: آج کے لیے ایک چھوٹا، خوشگوار عمل چنیں - صبح کی "
-                      "دس منٹ کی دھوپ، پودے کی دیکھ بھال، یا اپنا پسندیدہ چھوٹا کھانا "
-                      "بنانا - اور اسے پہلے سے کیسا محسوس کر رہے ہیں اس سے قطع نظر "
-                      "کریں۔ چھوٹے مکمل شدہ اعمال وہ خودمختاری کا احساس دوبارہ تعمیر "
-                      "کرتے ہیں جسے اداسی کمزور کر دیتی ہے۔",
+                "en": "Try a gentle 'behavioural activation' step today - morning "
+                      "sunlight, tending a plant, or a favourite meal - regardless "
+                      "of how you feel beforehand.",
+                "ur": "آج نرم 'رویاتی فعالیت' آزمائیں - صبح کی دھوپ، پودے کی دیکھ "
+                      "بھال، یا پسندیدہ کھانا - پہلے سے موڈ کیسا بھی ہو۔",
             })
         else:
             tips.append({
-                "en": "Try setting one small, achievable task for today, even something as "
-                      "simple as a short walk - depression often makes starting anything "
-                      "feel harder than it actually is.",
-                "ur": "آج کے لیے ایک چھوٹا اور قابلِ حصول کام مقرر کریں، چاہے وہ صرف ایک "
-                      "مختصر واک ہی کیوں نہ ہو - ڈپریشن میں کسی بھی کام کا آغاز حقیقت سے "
-                      "زیادہ مشکل محسوس ہوتا ہے۔",
+                "en": "Set one small, achievable task today, even a short walk - "
+                      "starting is usually the hardest part.",
+                "ur": "آج ایک چھوٹا اور قابلِ حصول کام مقرر کریں، چاہے صرف مختصر "
+                      "واک ہو - آغاز عام طور پر سب سے مشکل ہوتا ہے۔",
             })
 
     elif severity in _HIGH_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "What you're carrying sounds heavy. On the coping side, try "
-                      "'opposite action' from DBT: when low mood pulls you to "
-                      "isolate, deliberately do the small opposite thing - sit in a "
-                      "shared space, reply to one message, join a group activity for "
-                      "just ten minutes, even without wanting to. Separately, and "
-                      "just as importantly: please tell a trusted adult, campus "
-                      "counsellor, or a mental health professional what you shared "
-                      "here - you don't have to carry this alone.",
-                "ur": "آپ جو بوجھ اٹھا رہے ہیں وہ واقعی بھاری معلوم ہوتا ہے۔ نمٹنے کے "
-                      "لیے DBT کی 'مخالف عمل' تکنیک آزمائیں: جب اداسی آپ کو تنہائی کی "
-                      "طرف کھینچے، جان بوجھ کر اس کے چھوٹے مخالف کام کریں - کسی مشترکہ "
-                      "جگہ میں بیٹھیں، ایک پیغام کا جواب دیں، صرف دس منٹ کے لیے کسی "
-                      "گروپ سرگرمی میں شامل ہوں، چاہے دل نہ چاہے۔ الگ سے، اور اتنا ہی "
-                      "اہم: براہِ کرم جو کچھ آپ نے یہاں بتایا وہ کسی قابلِ اعتماد بڑے، "
-                      "کیمپس کونسلر، یا ذہنی صحت کے ماہر کو بھی بتائیں - آپ کو یہ "
-                      "اکیلے نہیں سنبھالنا۔",
+                "en": "Try DBT's 'opposite action': when you want to isolate, do "
+                      "the smaller opposite - reply to one message, join others "
+                      "for ten minutes. Please also tell a trusted adult or "
+                      "counsellor how you're feeling.",
+                "ur": "DBT کی 'مخالف عمل' آزمائیں: تنہائی چاہنے پر چھوٹا مخالف کام "
+                      "کریں - کسی پیغام کا جواب دیں، دس منٹ لوگوں کے ساتھ رہیں۔ "
+                      "براہِ کرم کسی قابلِ اعتماد بڑے یا کونسلر کو بھی بتائیں۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "This level of low mood, layered on top of career and "
-                      "relationship demands, deserves real support. As an "
-                      "in-the-moment technique, try 'opposite action': when the pull "
-                      "is to withdraw and cancel plans, do the smaller opposite - "
-                      "keep one commitment, even briefly. This isn't about pushing "
-                      "through everything; it's one counter-move against the "
-                      "isolation that deepens low mood. Please also make time this "
-                      "week to speak with a mental health professional directly.",
-                "ur": "کیریئر اور تعلقات کے دباؤ کے ساتھ اس سطح کی اداسی کو حقیقی مدد "
-                      "کی ضرورت ہے۔ فوری تکنیک کے طور پر 'مخالف عمل' آزمائیں: جب دل "
-                      "پیچھے ہٹنے اور منصوبے منسوخ کرنے کو چاہے، اس کے چھوٹے مخالف کام "
-                      "کریں - کوئی ایک وعدہ نبھائیں، مختصر ہی سہی۔ یہ سب کچھ زبردستی "
-                      "کرنے کی بات نہیں؛ یہ تنہائی کے خلاف ایک جوابی قدم ہے جو اداسی کو "
-                      "مزید گہرا کرتی ہے۔ براہِ کرم اس ہفتے کسی ذہنی صحت کے ماہر سے بھی "
-                      "براہِ راست بات کرنے کے لیے وقت نکالیں۔",
+                "en": "Try 'opposite action': when you want to withdraw, keep one "
+                      "small commitment instead. Please also make time this week "
+                      "to speak with a mental health professional.",
+                "ur": "'مخالف عمل' آزمائیں: پیچھے ہٹنے کی بجائے کوئی ایک چھوٹا "
+                      "وعدہ نبھائیں۔ براہِ کرم اس ہفتے کسی ذہنی صحت کے ماہر سے بھی "
+                      "بات کریں۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "Please know that what you're feeling is real and treatable, "
-                      "not something to simply endure - a conversation with a doctor "
-                      "or mental health professional soon matters here. As a daily "
-                      "practice alongside that: try 'opposite action' - when low mood "
-                      "makes you want to stay in and skip contact, choose the smaller "
-                      "opposite instead, like answering the door, sitting on the "
-                      "porch, or returning one call, even for a few minutes.",
-                "ur": "براہِ کرم جان لیں کہ آپ کا یہ احساس حقیقی ہے اور اس کا علاج "
-                      "ممکن ہے، اسے یونہی برداشت کرنے کی ضرورت نہیں - یہاں جلد کسی "
-                      "ڈاکٹر یا ذہنی صحت کے ماہر سے بات کرنا اہم ہے۔ اس کے ساتھ روزانہ "
-                      "کی مشق کے طور پر: 'مخالف عمل' آزمائیں - جب اداسی آپ کو گھر میں "
-                      "رہنے اور رابطے سے بچنے پر مجبور کرے، اس کے بجائے چھوٹا مخالف کام "
-                      "کریں، جیسے دروازہ کھولنا، برآمدے میں بیٹھنا، یا کسی ایک کال کا "
-                      "جواب دینا، چاہے چند منٹ کے لیے ہی سہی۔",
+                "en": "Try 'opposite action': when you want to stay in, choose "
+                      "the smaller opposite - answer the door, return one call. "
+                      "Please also speak with a doctor or mental health "
+                      "professional soon.",
+                "ur": "'مخالف عمل' آزمائیں: گھر میں رہنے کی بجائے چھوٹا مخالف کام "
+                      "کریں - دروازہ کھولیں، کسی کال کا جواب دیں۔ براہِ کرم جلد "
+                      "ڈاکٹر یا ذہنی صحت کے ماہر سے بات کریں۔",
             })
         else:
             tips.append({
-                "en": "Your responses suggest a significant level of low mood. Consider "
-                      "reaching out to a trusted person or a mental health professional "
-                      "soon - you don't have to manage this alone.",
-                "ur": "آپ کے جوابات ظاہر کرتے ہیں کہ آپ کا مزاج کافی حد تک متاثر ہے۔ کسی "
-                      "قابلِ اعتماد شخص یا ذہنی صحت کے ماہر سے جلد رابطہ کرنے پر غور کریں - "
-                      "آپ کو یہ اکیلے نہیں سنبھالنا۔",
+                "en": "Your responses suggest significant low mood. Consider "
+                      "reaching out to a trusted person or a mental health "
+                      "professional soon.",
+                "ur": "آپ کے جوابات کافی حد تک متاثرہ مزاج ظاہر کرتے ہیں۔ کسی "
+                      "قابلِ اعتماد شخص یا ذہنی صحت کے ماہر سے جلد رابطہ کریں۔",
             })
 
     return tips
@@ -360,101 +320,56 @@ def _gender_depression_tip(severity: str, bracket: Optional[str]) -> Optional[di
     if severity in _MILD_TIER:
         if bracket == "male":
             return {
-                "en": "Many men are socialised to push low mood aside rather than "
-                      "name it, which can make it build quietly. Try telling one "
-                      "person you trust a single honest sentence about how you've "
-                      "been feeling this week - not to solve it, just to say it out "
-                      "loud. Naming it to someone else is itself a form of relief, "
-                      "not a sign anything is wrong with you.",
-                "ur": "بہت سے مردوں کو یہ سکھایا جاتا ہے کہ اداسی کو نظرانداز کریں "
-                      "بجائے اسے تسلیم کرنے کے، جس سے یہ خاموشی سے بڑھ سکتی ہے۔ کسی "
-                      "قابلِ اعتماد شخص کو اس ہفتے اپنے احساس کے بارے میں ایک ایماندار "
-                      "جملہ بتانے کی کوشش کریں - اسے حل کرنے کے لیے نہیں، بس بلند "
-                      "آواز میں کہنے کے لیے۔ کسی اور کو بتانا خود ایک طرح کا سکون ہے، "
-                      "اس بات کی علامت نہیں کہ آپ میں کچھ غلط ہے۔",
+                "en": "Try telling one trusted person a single honest sentence "
+                      "about how you've been feeling - naming it out loud helps, "
+                      "it isn't a weakness.",
+                "ur": "کسی قابلِ اعتماد شخص کو اپنے احساس کے بارے میں ایک "
+                      "ایماندار جملہ بتائیں - بلند آواز میں کہنا مددگار ہے، "
+                      "کمزوری نہیں۔",
             }
         if bracket == "female":
             return {
-                "en": "Low mood often arrives alongside an invisible 'mental load' - "
-                      "remembering, planning, and caretaking for others - that many "
-                      "women carry by default. Try one small experiment this week: "
-                      "consciously hand off or skip one task you'd normally do "
-                      "automatically for someone else, and notice how that feels "
-                      "without immediately filling the space with something else.",
-                "ur": "اداسی اکثر ایک غیر مرئی 'ذہنی بوجھ' کے ساتھ آتی ہے - یاد "
-                      "رکھنا، منصوبہ بندی کرنا، اور دوسروں کی دیکھ بھال کرنا - جو بہت "
-                      "سی خواتین بطور معمول اٹھاتی ہیں۔ اس ہفتے ایک چھوٹا تجربہ "
-                      "کریں: جان بوجھ کر کوئی ایک کام کسی اور کے سپرد کریں یا چھوڑ "
-                      "دیں جو آپ عام طور پر خودکار طریقے سے کرتی ہیں، اور دیکھیں کہ "
-                      "اس خالی جگہ کو فوراً کسی اور چیز سے بھرے بغیر آپ کیسا محسوس "
-                      "کرتی ہیں۔",
+                "en": "Try one small experiment this week: hand off or skip one "
+                      "task you'd normally do for others, and notice how that "
+                      "feels.",
+                "ur": "اس ہفتے ایک چھوٹا تجربہ کریں: کوئی ایک کام جو آپ عام طور "
+                      "پر دوسروں کے لیے کرتی ہیں چھوڑ دیں یا کسی اور کے سپرد "
+                      "کریں، اور محسوس کریں۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "Low mood connected to navigating a world that doesn't always "
-                      "see or affirm your identity is real, and it isn't something "
-                      "you're overreacting to. Try to identify one space - a person, "
-                      "a community, an online group - where you feel fully seen, and "
-                      "spend a little deliberate time there this week rather than "
-                      "waiting for it to happen on its own.",
-                "ur": "ایک ایسی دنیا میں رہنے سے جڑی اداسی حقیقی ہے جو ہمیشہ آپ کی "
-                      "شناخت کو نہیں دیکھتی یا تسلیم نہیں کرتی، اور یہ کوئی ایسی چیز "
-                      "نہیں جس پر آپ ضرورت سے زیادہ ردِعمل ظاہر کر رہے ہیں۔ ایک ایسی "
-                      "جگہ پہچاننے کی کوشش کریں - کوئی شخص، کمیونٹی، یا آن لائن گروپ "
-                      "- جہاں آپ مکمل طور پر تسلیم کیے جاتے ہیں، اور اس ہفتے وہاں "
-                      "جان بوجھ کر تھوڑا وقت گزاریں، بجائے اس کے کہ یہ خود بخود ہونے "
-                      "کا انتظار کریں۔",
+                "en": "Try spending a little deliberate time this week in one "
+                      "space - a person, community, or group - where you feel "
+                      "fully seen.",
+                "ur": "اس ہفتے کچھ وقت جان بوجھ کر ایسی جگہ گزاریں - کوئی شخص، "
+                      "کمیونٹی، یا گروپ - جہاں آپ مکمل طور پر تسلیم کیے جاتے ہیں۔",
             }
         return None
 
     if severity in _HIGH_TIER:
         if bracket == "male":
             return {
-                "en": "Men are statistically less likely to seek help for low mood, "
-                      "often because of pressure to appear self-sufficient - but "
-                      "reaching out is a practical decision, not a measure of "
-                      "strength or weakness. Please consider making contact with a "
-                      "mental health professional this week, framed simply as "
-                      "getting information, if that feels easier than 'getting "
-                      "help'.",
-                "ur": "اداسی کے لیے مدد مانگنے کا امکان اعداد و شمار کے مطابق مردوں "
-                      "میں کم ہوتا ہے، اکثر خودکفیل دکھنے کے دباؤ کی وجہ سے - لیکن "
-                      "مدد مانگنا ایک عملی فیصلہ ہے، طاقت یا کمزوری کا پیمانہ نہیں۔ "
-                      "براہِ کرم اس ہفتے کسی ذہنی صحت کے ماہر سے رابطہ کرنے پر غور "
-                      "کریں، اگر 'مدد لینا' مشکل لگے تو اسے صرف معلومات حاصل کرنا "
-                      "سمجھ لیں۔",
+                "en": "Reaching out for support is a practical step, not a "
+                      "measure of strength. Please consider contacting a mental "
+                      "health professional this week.",
+                "ur": "مدد مانگنا ایک عملی قدم ہے، طاقت کا پیمانہ نہیں۔ براہِ "
+                      "کرم اس ہفتے کسی ذہنی صحت کے ماہر سے رابطہ کریں۔",
             }
         if bracket == "female":
             return {
-                "en": "This level of low mood deserves professional support, and it "
-                      "also deserves a serious look at what's being carried day to "
-                      "day - many women reach this point while also managing a "
-                      "disproportionate share of household or caregiving load. "
-                      "Alongside seeing a professional, try naming out loud to "
-                      "someone close to you one specific responsibility you need "
-                      "help with this week.",
-                "ur": "اداسی کی یہ سطح پیشہ ورانہ مدد کی مستحق ہے، اور اسے سنجیدگی سے "
-                      "دیکھنے کی بھی ضرورت ہے کہ روزانہ کیا بوجھ اٹھایا جا رہا ہے - "
-                      "بہت سی خواتین اس مقام تک پہنچتی ہیں جبکہ گھریلو یا نگہداشت کے "
-                      "کام کا غیر متناسب بوجھ بھی اٹھا رہی ہوتی ہیں۔ کسی ماہر سے ملنے "
-                      "کے ساتھ ساتھ، اپنے قریبی شخص کے سامنے کھل کر ایک مخصوص ذمہ "
-                      "داری کا نام لیں جس میں آپ کو اس ہفتے مدد چاہیے۔",
+                "en": "Alongside seeing a professional, try naming one specific "
+                      "responsibility you need help with to someone close to "
+                      "you.",
+                "ur": "کسی ماہر سے ملنے کے ساتھ، اپنے قریبی شخص کو کوئی ایک "
+                      "مخصوص ذمہ داری بتائیں جس میں آپ کو مدد چاہیے۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "This level of low mood, especially when tied to navigating "
-                      "identity-related stress, deserves real support - and it "
-                      "matters to find a mental health professional who is "
-                      "explicitly identity-affirming, rather than one you have to "
-                      "first educate. It is worth asking directly about this when "
-                      "booking, and it does not make your experience any less "
-                      "valid to need that.",
-                "ur": "اداسی کی یہ سطح، خاص طور پر جب شناخت سے جڑے دباؤ کے ساتھ ہو، "
-                      "حقیقی مدد کی مستحق ہے - اور ایسا ذہنی صحت کا ماہر تلاش کرنا "
-                      "اہم ہے جو کھلے طور پر شناخت کو تسلیم کرتا ہو، نہ کہ وہ جسے آپ "
-                      "کو پہلے سمجھانا پڑے۔ بکنگ کے وقت اس بارے میں براہِ راست پوچھنا "
-                      "درست ہے، اور اس کی ضرورت آپ کے تجربے کو کسی بھی طرح کم اہم "
-                      "نہیں بناتی۔",
+                "en": "Look specifically for a mental health professional who "
+                      "is identity-affirming - it's reasonable to ask about "
+                      "this directly when booking.",
+                "ur": "ایسا ذہنی صحت کا ماہر تلاش کریں جو شناخت کو کھلے طور پر "
+                      "تسلیم کرتا ہو - بکنگ کے وقت یہ پوچھنا درست ہے۔",
             }
         return None
 
@@ -470,119 +385,77 @@ def _anxiety_tips(severity: str, bracket: Optional[str]) -> list[dict]:
     if severity in _MILD_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "When exam stress or notifications spike your heart rate, try "
-                      "the 'physiological sigh': two short inhales through your nose "
-                      "back-to-back, then one long, slow exhale through your mouth. "
-                      "Repeat it 3-4 times - it's one of the fastest known ways to "
-                      "calm the nervous system, and you can do it silently at your "
-                      "desk between classes.",
-                "ur": "جب امتحان کا دباؤ یا نوٹیفیکیشنز آپ کی دل کی دھڑکن بڑھا دیں تو "
-                      "'فزیولوجیکل سائی' آزمائیں: ناک سے لگاتار دو مختصر سانسیں "
-                      "اندر کھینچیں، پھر منہ سے ایک لمبی، سست سانس باہر چھوڑیں۔ اسے 3 "
-                      "سے 4 بار دہرائیں - یہ اعصابی نظام کو پرسکون کرنے کے تیز ترین "
-                      "طریقوں میں سے ایک ہے، اور آپ اسے کلاسوں کے درمیان خاموشی سے "
-                      "اپنی میز پر کر سکتے ہیں۔",
+                "en": "Try the 'physiological sigh': two short inhales through "
+                      "the nose, then one long exhale through the mouth. Repeat "
+                      "3-4 times.",
+                "ur": "'فزیولوجیکل سائی' آزمائیں: ناک سے دو مختصر سانسیں، پھر "
+                      "منہ سے ایک لمبی سانس باہر۔ 3-4 بار دہرائیں۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "When anxiety spikes mid-workday, try box breathing: inhale for "
-                      "4 counts, hold for 4, exhale for 4, hold for 4, and repeat for "
-                      "a minute. It's discreet enough to do in a meeting or at your "
-                      "desk, and it directly lowers the physical arousal that racing "
-                      "thoughts feed on.",
-                "ur": "جب کام کے دوران بے چینی بڑھے تو 'باکس بریدنگ' آزمائیں: 4 گنتی "
-                      "تک سانس اندر لیں، 4 گنتی تک روکیں، 4 گنتی تک باہر چھوڑیں، 4 "
-                      "گنتی تک روکیں، اور اسے ایک منٹ تک دہرائیں۔ یہ اتنی خاموش تکنیک "
-                      "ہے کہ آپ اسے میٹنگ میں یا اپنی میز پر بھی کر سکتے ہیں، اور یہ "
-                      "اس جسمانی تحریک کو براہِ راست کم کرتی ہے جس سے تیز خیالات "
-                      "پرورش پاتے ہیں۔",
+                "en": "Try box breathing: inhale for 4 counts, hold 4, exhale "
+                      "4, hold 4. Repeat for a minute - discreet enough for a "
+                      "meeting or your desk.",
+                "ur": "'باکس بریدنگ' آزمائیں: 4 گنتی سانس اندر، 4 روکیں، 4 "
+                      "باہر، 4 روکیں۔ ایک منٹ دہرائیں - یہ میٹنگ یا میز پر بھی "
+                      "کی جا سکتی ہے۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "When worry builds, try pairing slow breathing with gentle "
-                      "movement: breathe in for a count of 4 while raising your arms "
-                      "slowly, breathe out for a count of 6 while lowering them. Ten "
-                      "rounds of this, done seated or standing, is a low-strain way "
-                      "to settle the body before the mind follows.",
-                "ur": "جب پریشانی بڑھے تو سست سانس کو نرم حرکت کے ساتھ ملائیں: 4 "
-                      "گنتی تک سانس اندر لیتے ہوئے آہستہ آہستہ بازو اوپر اٹھائیں، 6 "
-                      "گنتی تک سانس باہر چھوڑتے ہوئے انہیں نیچے لائیں۔ بیٹھ کر یا کھڑے "
-                      "ہو کر اس کے دس دور کرنا جسم کو کم دباؤ کے ساتھ پرسکون کرنے کا "
-                      "طریقہ ہے، اور ذہن بعد میں اس کی پیروی کرتا ہے۔",
+                "en": "Pair slow breathing with gentle movement: inhale for 4 "
+                      "counts raising your arms, exhale for 6 lowering them. "
+                      "Ten rounds, seated or standing.",
+                "ur": "سست سانس کو نرم حرکت کے ساتھ ملائیں: 4 گنتی سانس اندر "
+                      "لیتے ہوئے بازو اٹھائیں، 6 گنتی باہر چھوڑتے ہوئے نیچے "
+                      "لائیں۔ دس دور کریں۔",
             })
         else:
             tips.append({
-                "en": "When anxiety builds up, try the 5-4-3-2-1 grounding technique: name "
-                      "5 things you can see, 4 you can touch, 3 you can hear, 2 you can "
-                      "smell, and 1 you can taste.",
-                "ur": "جب بے چینی بڑھے تو 5-4-3-2-1 گراؤنڈنگ تکنیک آزمائیں: 5 چیزیں جو آپ "
-                      "دیکھ سکتے ہیں، 4 جنہیں چھو سکتے ہیں، 3 جو سن سکتے ہیں، 2 جن کی خوشبو "
-                      "محسوس کر سکتے ہیں، اور 1 جسے چکھ سکتے ہیں، ان کے نام لیں۔",
+                "en": "Try the 5-4-3-2-1 grounding technique: name 5 things "
+                      "you see, 4 you touch, 3 you hear, 2 you smell, 1 you "
+                      "taste.",
+                "ur": "5-4-3-2-1 گراؤنڈنگ تکنیک آزمائیں: 5 چیزیں دیکھیں، 4 "
+                      "چھوئیں، 3 سنیں، 2 سونگھیں، 1 چکھیں۔",
             })
 
     elif severity in _HIGH_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "This level of anxiety is a lot to carry through classes and "
-                      "revision. Try scheduling a daily 10-minute 'worry window' - "
-                      "when a worry pops up outside that window, jot it down and "
-                      "tell yourself 'I'll think about this at 6pm' instead of "
-                      "engaging with it immediately. This CBT technique trains your "
-                      "brain that worries don't need instant attention. Please pair "
-                      "this with talking to a school counsellor or mental health "
-                      "professional about what's underneath the worry.",
-                "ur": "بے چینی کی یہ سطح کلاسوں اور امتحانی تیاری کے دوران بہت زیادہ "
-                      "ہے۔ روزانہ 10 منٹ کی 'فکر کی کھڑکی' مقرر کرنے کی کوشش کریں - "
-                      "جب کوئی فکر اس وقت سے باہر ابھرے، اسے لکھ لیں اور خود سے کہیں "
-                      "'میں اس پر شام 6 بجے سوچوں گا' بجائے اس کے کہ فوراً اس میں الجھ "
-                      "جائیں۔ یہ CBT تکنیک آپ کے دماغ کو سکھاتی ہے کہ فکروں کو فوری "
-                      "توجہ کی ضرورت نہیں۔ براہِ کرم اسے کسی اسکول کونسلر یا ذہنی صحت "
-                      "کے ماہر سے فکر کی اصل وجہ پر بات کرنے کے ساتھ ملائیں۔",
+                "en": "Try a daily 10-minute 'worry window': write worries down "
+                      "and revisit them at a set time instead of engaging right "
+                      "away. Please also talk to a counsellor or mental health "
+                      "professional.",
+                "ur": "روزانہ 10 منٹ کی 'فکر کی کھڑکی' آزمائیں: فکریں لکھ لیں "
+                      "اور مقررہ وقت پر دیکھیں، فوراً نہیں۔ براہِ کرم کونسلر یا "
+                      "ذہنی صحت کے ماہر سے بھی بات کریں۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "Your anxiety responses are in a higher range, likely fed by "
-                      "career and relationship demands running in the background all "
-                      "day. Try a daily 'worry window': set aside 10-15 minutes in "
-                      "the evening to deliberately think through what's worrying you "
-                      "and write down one next step for each - then, when the same "
-                      "worry resurfaces during the day, remind yourself it already "
-                      "has a slot. Please also bring this to a mental health "
-                      "professional, since sustained high anxiety affects sleep and "
-                      "physical health too.",
-                "ur": "آپ کی بے چینی کے جوابات زیادہ سطح پر ہیں، غالباً کیریئر اور "
-                      "تعلقات کے تقاضے دن بھر پس منظر میں چلتے رہنے کی وجہ سے۔ روزانہ "
-                      "کی 'فکر کی کھڑکی' آزمائیں: شام کو 10 سے 15 منٹ الگ رکھیں تاکہ "
-                      "جان بوجھ کر اپنی پریشانیوں کے بارے میں سوچیں اور ہر ایک کے لیے "
-                      "اگلا قدم لکھیں - پھر جب دن میں وہی فکر دوبارہ ابھرے، خود کو "
-                      "یاد دلائیں کہ اس کا وقت پہلے سے مقرر ہے۔ براہِ کرم یہ بات کسی "
-                      "ذہنی صحت کے ماہر تک بھی پہنچائیں، کیونکہ مسلسل شدید بے چینی نیند "
-                      "اور جسمانی صحت کو بھی متاثر کرتی ہے۔",
+                "en": "Try a daily 'worry window': set aside 10-15 minutes each "
+                      "evening to think through worries and note one next step "
+                      "for each. Please also speak with a mental health "
+                      "professional.",
+                "ur": "روزانہ 'فکر کی کھڑکی' آزمائیں: شام کو 10-15 منٹ فکروں پر "
+                      "سوچنے اور اگلا قدم لکھنے کے لیے رکھیں۔ براہِ کرم ذہنی "
+                      "صحت کے ماہر سے بھی بات کریں۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "This level of anxiety deserves a conversation with a doctor "
-                      "or mental health professional - it's common and treatable, "
-                      "not something to manage silently. As a daily practice, try a "
-                      "short 'worry window': pick a fixed 10 minutes each day to sit "
-                      "with your worries on purpose, write them down, and set them "
-                      "aside for the rest of the day - this can stop worry from "
-                      "quietly running in the background for hours.",
-                "ur": "بے چینی کی یہ سطح کسی ڈاکٹر یا ذہنی صحت کے ماہر سے بات کرنے کی "
-                      "مستحق ہے - یہ عام اور قابلِ علاج ہے، اسے خاموشی سے سنبھالنے کی "
-                      "ضرورت نہیں۔ روزانہ کی مشق کے طور پر مختصر 'فکر کی کھڑکی' "
-                      "آزمائیں: ہر روز جان بوجھ کر 10 منٹ کا مقررہ وقت اپنی پریشانیوں "
-                      "کے ساتھ گزارنے کے لیے چنیں، انہیں لکھ لیں، اور باقی دن کے لیے "
-                      "الگ رکھ دیں - یہ فکر کو گھنٹوں تک خاموشی سے پس منظر میں چلنے "
-                      "سے روک سکتا ہے۔",
+                "en": "Try a short daily 'worry window': set aside 10 minutes "
+                      "to sit with your worries on purpose, then set them "
+                      "aside. This also deserves a conversation with a doctor "
+                      "or mental health professional.",
+                "ur": "روزانہ مختصر 'فکر کی کھڑکی' آزمائیں: 10 منٹ جان بوجھ کر "
+                      "فکروں کے ساتھ گزاریں، پھر الگ رکھ دیں۔ اس پر ڈاکٹر یا "
+                      "ذہنی صحت کے ماہر سے بھی بات کریں۔",
             })
         else:
             tips.append({
-                "en": "Your anxiety responses are in a higher range. Alongside grounding "
-                      "techniques, it may help to talk to a mental health professional "
-                      "about what you're experiencing.",
-                "ur": "آپ کی بے چینی کے جوابات زیادہ سطح پر ہیں۔ گراؤنڈنگ تکنیکوں کے ساتھ "
-                      "ساتھ، ذہنی صحت کے ماہر سے اپنی صورتحال پر بات کرنا مفید ہو سکتا ہے۔",
+                "en": "Your anxiety responses are in a higher range. Alongside "
+                      "grounding techniques, consider talking to a mental "
+                      "health professional about what you're experiencing.",
+                "ur": "آپ کی بے چینی زیادہ سطح پر ہے۔ گراؤنڈنگ تکنیکوں کے "
+                      "ساتھ، ذہنی صحت کے ماہر سے بات کرنے پر غور کریں۔",
             })
 
     return tips
@@ -596,94 +469,59 @@ def _gender_anxiety_tip(severity: str, bracket: Optional[str]) -> Optional[dict]
     if severity in _MILD_TIER:
         if bracket == "male":
             return {
-                "en": "Anxiety can show up as restlessness or irritability rather "
-                      "than obvious worry, especially when there's pressure to "
-                      "'have it handled'. Try channelling that restless energy into "
-                      "a short burst of physical activity - push-ups, a fast walk, "
-                      "stairs - for 5 minutes when you notice it building; it gives "
-                      "the energy somewhere real to go.",
-                "ur": "بے چینی اکثر واضح فکر کی بجائے بے چینی یا چڑچڑاپن کی صورت میں "
-                      "ظاہر ہوتی ہے، خاص طور پر جب 'سب کچھ سنبھالا ہوا' دکھنے کا دباؤ "
-                      "ہو۔ اس بے چین توانائی کو جسمانی سرگرمی کے مختصر پھٹنے میں "
-                      "استعمال کرنے کی کوشش کریں - پش اپس، تیز واک، سیڑھیاں - جب "
-                      "محسوس ہو کہ یہ بڑھ رہی ہے، 5 منٹ کے لیے؛ یہ توانائی کو ایک "
-                      "حقیقی راستہ دیتا ہے۔",
+                "en": "Restless energy can be a sign of anxiety too. Try 5 "
+                      "minutes of physical activity - push-ups, a fast walk, "
+                      "stairs - when you notice it building.",
+                "ur": "بے چین توانائی بھی بے چینی کی علامت ہو سکتی ہے۔ جب یہ "
+                      "بڑھے تو 5 منٹ جسمانی سرگرمی کریں - پش اپس، تیز واک، "
+                      "سیڑھیاں۔",
             }
         if bracket == "female":
             return {
-                "en": "Anxiety can intensify when you're mentally tracking many "
-                      "people's needs at once, not just your own. Try a 'brain dump' "
-                      "before bed: write down everything you're holding in mind for "
-                      "other people (appointments, reminders, things to arrange) so "
-                      "your mind doesn't have to keep rehearsing it overnight.",
-                "ur": "بے چینی اس وقت بڑھ سکتی ہے جب آپ ذہنی طور پر کئی لوگوں کی "
-                      "ضروریات کو ٹریک کر رہی ہوں، نہ صرف اپنی۔ سونے سے پہلے 'دماغ "
-                      "خالی کرنا' آزمائیں: وہ سب کچھ لکھ لیں جو آپ دوسروں کے لیے ذہن "
-                      "میں رکھی ہوئی ہیں (ملاقاتیں، یاد دہانیاں، کرنے والے کام) تاکہ "
-                      "آپ کے ذہن کو رات بھر اسے دہرانا نہ پڑے۔",
+                "en": "Try a 'brain dump' before bed: write down everything "
+                      "you're holding in mind for other people, so your mind "
+                      "doesn't rehearse it overnight.",
+                "ur": "سونے سے پہلے 'دماغ خالی کرنا' آزمائیں: دوسروں کے لیے یاد "
+                      "رکھی گئی باتیں لکھ لیں تاکہ ذہن رات بھر نہ دہرائے۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "Anxiety tied to unfamiliar spaces - new people, forms that "
-                      "don't fit, unclear reactions - is a real, specific kind of "
-                      "vigilance, not just general nervousness. Before entering a "
-                      "situation like this, it can help to plan one small anchor in "
-                      "advance: a person you can text, or a phrase you'll use if you "
-                      "need to step away.",
-                "ur": "نامانوس جگہوں سے جڑی بے چینی - نئے لوگ، وہ فارم جو فٹ نہیں "
-                      "بیٹھتے، غیر واضح ردِعمل - ایک حقیقی، مخصوص قسم کی چوکسی ہے، "
-                      "محض عمومی گھبراہٹ نہیں۔ ایسی صورتحال میں جانے سے پہلے، پہلے "
-                      "سے ایک چھوٹا سہارا طے کرنا مددگار ہو سکتا ہے: کوئی شخص جسے آپ "
-                      "پیغام بھیج سکیں، یا ایک جملہ جو آپ باہر نکلنے کی ضرورت پر "
-                      "استعمال کریں۔",
+                "en": "Before entering an unfamiliar or unaffirming space, "
+                      "plan one small anchor in advance - a person you can "
+                      "text, or a phrase to use if you need to step away.",
+                "ur": "کسی نامانوس یا غیر تسلیم کرنے والی جگہ جانے سے پہلے ایک "
+                      "سہارا طے کریں - کوئی شخص جسے پیغام بھیج سکیں، یا نکلنے "
+                      "کا جملہ۔",
             }
         return None
 
     if severity in _HIGH_TIER:
         if bracket == "male":
             return {
-                "en": "Persistently high anxiety often gets minimised as 'just "
-                      "stress' rather than named and addressed, particularly by men. "
-                      "Please consider raising this specifically and directly with a "
-                      "doctor or mental health professional, using concrete words "
-                      "like 'racing thoughts' or 'can't switch off' rather than "
-                      "downplaying it.",
-                "ur": "مسلسل شدید بے چینی کو اکثر نام دینے اور حل کرنے کی بجائے "
-                      "'محض تناؤ' کہہ کر نظرانداز کر دیا جاتا ہے، خاص طور پر مردوں "
-                      "کی طرف سے۔ براہِ کرم اسے واضح طور پر کسی ڈاکٹر یا ذہنی صحت کے "
-                      "ماہر کے سامنے بیان کرنے پر غور کریں، ٹھوس الفاظ استعمال کرتے "
-                      "ہوئے جیسے 'خیالات تیزی سے دوڑتے ہیں' یا 'ذہن بند نہیں ہوتا'، "
-                      "اسے کم اہم بنائے بغیر۔",
+                "en": "Please raise this specifically with a doctor or mental "
+                      "health professional, using concrete words like 'racing "
+                      "thoughts' rather than calling it 'just stress'.",
+                "ur": "براہِ کرم ڈاکٹر یا ذہنی صحت کے ماہر کو واضح الفاظ میں "
+                      "بتائیں، جیسے 'خیالات کا تیزی سے دوڑنا'، اسے محض 'تناؤ' "
+                      "نہ کہیں۔",
             }
         if bracket == "female":
             return {
-                "en": "This level of anxiety deserves professional attention, and "
-                      "it's also worth asking whether you're being asked to hold too "
-                      "many people's logistics and emotions at once. Please talk to "
-                      "a mental health professional, and separately, try identifying "
-                      "one recurring 'invisible task' you could ask a partner, "
-                      "family member, or colleague to take over.",
-                "ur": "بے چینی کی یہ سطح پیشہ ورانہ توجہ کی مستحق ہے، اور یہ سوچنا "
-                      "بھی ضروری ہے کہ کیا آپ سے ایک وقت میں بہت سے لوگوں کی منصوبہ "
-                      "بندی اور جذبات سنبھالنے کو کہا جا رہا ہے۔ براہِ کرم کسی ذہنی "
-                      "صحت کے ماہر سے بات کریں، اور الگ سے، کوئی ایک بار بار آنے "
-                      "والا 'غیر مرئی کام' پہچانیں جسے آپ کسی ساتھی، خاندان کے فرد، "
-                      "یا ساتھی کارکن کے سپرد کر سکتی ہیں۔",
+                "en": "Please talk to a mental health professional, and "
+                      "separately, identify one recurring 'invisible task' you "
+                      "could hand to someone else.",
+                "ur": "براہِ کرم کسی ذہنی صحت کے ماہر سے بات کریں، اور ایک بار "
+                      "بار آنے والا 'غیر مرئی کام' کسی اور کے سپرد کریں۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "Constant vigilance in spaces that may not affirm your "
-                      "identity is a documented driver of anxiety, not an "
-                      "overreaction. When looking for professional support, it is "
-                      "reasonable to specifically look for, or ask about, "
-                      "identity-affirming care - you shouldn't have to spend therapy "
-                      "time explaining the basics of who you are.",
-                "ur": "ایسی جگہوں پر مسلسل چوکسی جو آپ کی شناخت کو تسلیم نہیں کر "
-                      "سکتیں، بے چینی کی ایک مصدقہ وجہ ہے، ضرورت سے زیادہ ردِعمل "
-                      "نہیں۔ پیشہ ورانہ مدد تلاش کرتے وقت، خاص طور پر شناخت کو "
-                      "تسلیم کرنے والی دیکھ بھال تلاش کرنا یا اس کے بارے میں پوچھنا "
-                      "درست ہے - آپ کو تھراپی کا وقت اپنی بنیادی شناخت سمجھانے میں "
-                      "صرف نہیں کرنا چاہیے۔",
+                "en": "When looking for professional support, it's reasonable "
+                      "to specifically ask about identity-affirming care - you "
+                      "shouldn't have to explain the basics of who you are "
+                      "first.",
+                "ur": "پیشہ ورانہ مدد تلاش کرتے وقت شناخت کو تسلیم کرنے والی "
+                      "دیکھ بھال کے بارے میں پوچھنا درست ہے - آپ کو پہلے خود کو "
+                      "سمجھانا نہیں پڑنا چاہیے۔",
             }
         return None
 
@@ -699,116 +537,77 @@ def _stress_tips(severity: str, bracket: Optional[str]) -> list[dict]:
     if severity in _MILD_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "Try pacing study sessions the way athletes pace effort: 25 "
-                      "minutes of focused work, then a real 5-minute break away from "
-                      "screens (stand up, look out a window, get water) before the "
-                      "next block. This rhythm - a form of timeboxing - prevents the "
-                      "slow build-up of stress that back-to-back cramming causes.",
-                "ur": "پڑھائی کے سیشنز کو اسی طرح رفتار دیں جیسے کھلاڑی اپنی توانائی "
-                      "بچا کر رکھتے ہیں: 25 منٹ مرکوز کام، پھر اسکرین سے دور 5 منٹ کا "
-                      "حقیقی وقفہ (کھڑے ہوں، کھڑکی سے باہر دیکھیں، پانی پئیں) اگلے "
-                      "حصے سے پہلے۔ یہ تال - ٹائم باکسنگ کی ایک شکل - مسلسل پڑھائی سے "
-                      "پیدا ہونے والے تناؤ کو آہستہ آہستہ بڑھنے سے روکتی ہے۔",
+                "en": "Try timeboxing: 25 minutes of focused work, then a real "
+                      "5-minute break away from screens before the next block.",
+                "ur": "ٹائم باکسنگ آزمائیں: 25 منٹ مرکوز کام، پھر اسکرین سے دور "
+                      "5 منٹ کا حقیقی وقفہ۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "At this stage, stress often builds from an ever-growing "
-                      "mental to-do list spanning work and home. Try 'task "
-                      "chunking': break one large task into its smallest next "
-                      "physical step and do only that step - not the whole thing - "
-                      "before reassessing. Finishing a small, well-defined piece "
-                      "resets the overwhelm that a huge, vague task creates.",
-                "ur": "اس عمر میں تناؤ اکثر کام اور گھر کی مسلسل بڑھتی ہوئی ذہنی فہرست "
-                      "سے پیدا ہوتا ہے۔ 'ٹاسک چنکنگ' آزمائیں: کسی ایک بڑے کام کو اس "
-                      "کے سب سے چھوٹے اگلے عملی قدم میں تقسیم کریں اور دوبارہ جائزہ "
-                      "لینے سے پہلے صرف وہی قدم کریں - پورا کام نہیں۔ ایک چھوٹے، واضح "
-                      "حصے کو مکمل کرنا اس مغلوبیت کو ختم کرتا ہے جو ایک بڑا، غیر "
-                      "واضح کام پیدا کرتا ہے۔",
+                "en": "Try 'task chunking': break one large task into its "
+                      "smallest next step and do only that, before "
+                      "reassessing.",
+                "ur": "'ٹاسک چنکنگ' آزمائیں: بڑے کام کو اگلے چھوٹے قدم میں "
+                      "تقسیم کریں اور صرف وہی کریں، پھر دوبارہ جائزہ لیں۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "Gentle, low-impact movement - a short walk, light stretching, "
-                      "or time in fresh air - lowers stress hormones in a way that's "
-                      "kind to the body. Try setting a fixed time each day for this, "
-                      "even ten minutes, so it becomes a reliable pressure-release "
-                      "rather than something that only happens if the day allows it.",
-                "ur": "نرم اور کم دباؤ والی حرکت - مختصر واک، ہلکی سٹریچنگ، یا کھلی "
-                      "ہوا میں وقت گزارنا - جسم کے لیے نرمی کے ساتھ تناؤ کے ہارمونز "
-                      "کم کرتی ہے۔ اس کے لیے ہر روز ایک مقررہ وقت رکھنے کی کوشش کریں، "
-                      "دس منٹ ہی سہی، تاکہ یہ ایک قابلِ اعتماد راحت بن جائے، نہ کہ صرف "
-                      "اس وقت ہو جب دن اجازت دے۔",
+                "en": "Set a fixed time each day, even ten minutes, for "
+                      "gentle movement - a short walk, light stretching, or "
+                      "fresh air.",
+                "ur": "ہر روز ایک مقررہ وقت رکھیں، دس منٹ ہی سہی، نرم حرکت کے "
+                      "لیے - مختصر واک، ہلکی سٹریچنگ، یا کھلی ہوا۔",
             })
         else:
             tips.append({
-                "en": "Build in short, deliberate breaks through your day - even five "
-                      "minutes away from a task can meaningfully lower stress before it "
-                      "builds up further.",
-                "ur": "اپنے دن میں مختصر اور جان بوجھ کر وقفے شامل کریں - کسی کام سے صرف "
-                      "پانچ منٹ دور رہنا بھی تناؤ کو بڑھنے سے پہلے نمایاں طور پر کم کر سکتا ہے۔",
+                "en": "Build in short, deliberate breaks through your day - "
+                      "even five minutes away from a task can lower stress "
+                      "before it builds up.",
+                "ur": "اپنے دن میں مختصر وقفے شامل کریں - کسی کام سے پانچ منٹ "
+                      "دور رہنا بھی تناؤ کو بڑھنے سے پہلے کم کر سکتا ہے۔",
             })
 
     elif severity in _HIGH_TIER:
         if bracket == "youth":
             tips.append({
-                "en": "This level of stress under academic pressure is not "
-                      "sustainable long-term. Try a quick triage: list everything "
-                      "due this week, then sort each item into 'must do', 'can ask "
-                      "for an extension on', or 'can drop/delegate to a study "
-                      "partner' - most students overestimate how much is truly "
-                      "fixed. Please also talk to a teacher, counsellor, or mental "
-                      "health professional about your workload directly.",
-                "ur": "تعلیمی دباؤ کے تحت تناؤ کی یہ سطح طویل مدت تک برداشت کرنا ممکن "
-                      "نہیں۔ فوری ترجیح بندی آزمائیں: اس ہفتے کی ہر ذمہ داری فہرست "
-                      "کریں، پھر ہر چیز کو 'لازمی کرنا ہے'، 'توسیع مانگی جا سکتی ہے'، "
-                      "یا 'چھوڑا یا اسٹڈی پارٹنر کے سپرد کیا جا سکتا ہے' میں تقسیم "
-                      "کریں - زیادہ تر طلبہ یہ اندازہ زیادہ لگا لیتے ہیں کہ کتنا حقیقتاً "
-                      "طے شدہ ہے۔ براہِ کرم اپنے کام کے بوجھ پر کسی استاد، کونسلر، یا "
-                      "ذہنی صحت کے ماہر سے براہِ راست بھی بات کریں۔",
+                "en": "Try a quick triage: sort everything due this week into "
+                      "'must do', 'can ask for an extension on', or 'can "
+                      "drop'. Please also talk to a teacher, counsellor, or "
+                      "mental health professional.",
+                "ur": "فوری ترجیح بندی آزمائیں: ہر ذمہ داری کو 'لازمی'، "
+                      "'توسیع مانگی جا سکتی ہے'، یا 'چھوڑی جا سکتی ہے' میں "
+                      "تقسیم کریں۔ براہِ کرم استاد، کونسلر، یا ذہنی صحت کے "
+                      "ماہر سے بھی بات کریں۔",
             })
         elif bracket == "adult":
             tips.append({
-                "en": "Your stress levels appear quite high, likely from carrying "
-                      "career and relationship demands simultaneously. Try a simple "
-                      "triage exercise: list every current demand on your time, then "
-                      "mark each as 'only I can do this', 'could be delegated', or "
-                      "'could wait'. Acting on even one item in the second or third "
-                      "category this week reduces real load, not just the feeling "
-                      "of it. Chronic high stress affects the body too, so please "
-                      "also raise this with a mental health professional.",
-                "ur": "آپ کی تناؤ کی سطح کافی زیادہ معلوم ہوتی ہے، غالباً کیریئر اور "
-                      "تعلقات کے تقاضے بیک وقت اٹھانے کی وجہ سے۔ ایک سادہ ترجیح بندی "
-                      "کی مشق آزمائیں: اپنے وقت پر ہر موجودہ دباؤ کی فہرست بنائیں، پھر "
-                      "ہر ایک کو 'صرف میں یہ کر سکتا ہوں'، 'کسی اور کے سپرد ہو سکتا "
-                      "ہے'، یا 'انتظار کر سکتا ہے' کا نشان لگائیں۔ اس ہفتے دوسری یا "
-                      "تیسری قسم میں سے کسی ایک پر عمل کرنا اصل بوجھ کم کرتا ہے، نہ "
-                      "کہ صرف اس کا احساس۔ مسلسل شدید تناؤ جسم کو بھی متاثر کرتا "
-                      "ہے، اس لیے براہِ کرم یہ بات ذہنی صحت کے ماہر سے بھی بیان کریں۔",
+                "en": "Try a triage exercise: list every current demand, then "
+                      "mark each 'only I can do this', 'could be delegated', "
+                      "or 'could wait'. Please also raise this with a mental "
+                      "health professional.",
+                "ur": "ترجیح بندی آزمائیں: ہر موجودہ دباؤ کی فہرست بنائیں، "
+                      "پھر نشان لگائیں 'صرف میں کر سکتا ہوں'، 'سپرد ہو سکتا "
+                      "ہے'، یا 'انتظار کر سکتا ہے'۔ براہِ کرم ذہنی صحت کے ماہر "
+                      "سے بھی بات کریں۔",
             })
         elif bracket == "senior":
             tips.append({
-                "en": "This level of stress deserves attention from a doctor or "
-                      "mental health professional, both for your mind and your body. "
-                      "As a practical step, try simplifying: pick one commitment or "
-                      "obligation you're currently holding onto out of habit rather "
-                      "than necessity, and consider letting it go or asking someone "
-                      "to share it - fewer, more manageable commitments often ease "
-                      "stress more than trying to do everything more efficiently.",
-                "ur": "تناؤ کی یہ سطح کسی ڈاکٹر یا ذہنی صحت کے ماہر کی توجہ کی مستحق "
-                      "ہے، آپ کے ذہن اور جسم دونوں کے لیے۔ عملی قدم کے طور پر، آسان "
-                      "بنانے کی کوشش کریں: کوئی ایک وعدہ یا ذمہ داری چنیں جسے آپ فی "
-                      "الحال ضرورت کی بجائے عادت کے تحت نبھا رہے ہیں، اور اسے چھوڑنے "
-                      "یا کسی کے ساتھ بانٹنے پر غور کریں - کم مگر قابلِ انتظام ذمہ "
-                      "داریاں اکثر تناؤ کو ہر چیز زیادہ مؤثر طریقے سے کرنے کی کوشش سے "
-                      "زیادہ کم کرتی ہیں۔",
+                "en": "Try simplifying: pick one commitment you're holding "
+                      "onto out of habit rather than necessity, and let it go "
+                      "or share it. This also deserves a doctor or mental "
+                      "health professional's attention.",
+                "ur": "آسان بنانے کی کوشش کریں: کوئی ایک وعدہ جو عادت کے تحت "
+                      "نبھا رہے ہیں چھوڑ دیں یا بانٹ لیں۔ اس پر ڈاکٹر یا ذہنی "
+                      "صحت کے ماہر سے بھی بات کریں۔",
             })
         else:
             tips.append({
-                "en": "Your stress levels appear quite high. Consider what specific "
-                      "demands on your time could be reduced or shared, and whether "
-                      "talking to someone about your workload would help.",
-                "ur": "آپ کی تناؤ کی سطح کافی زیادہ معلوم ہوتی ہے۔ غور کریں کہ آپ کے وقت پر "
-                      "کون سے مخصوص دباؤ کم یا کسی کے ساتھ بانٹے جا سکتے ہیں، اور کیا کسی سے "
-                      "اپنے کام کے بوجھ پر بات کرنا مددگار ہو سکتا ہے۔",
+                "en": "Your stress levels appear quite high. Consider what "
+                      "demands on your time could be reduced or shared, and "
+                      "talk to someone about your workload.",
+                "ur": "آپ کی تناؤ کی سطح کافی زیادہ ہے۔ غور کریں کہ کون سے "
+                      "دباؤ کم یا بانٹے جا سکتے ہیں، اور اپنے کام کے بوجھ پر "
+                      "کسی سے بات کریں۔",
             })
 
     return tips
@@ -822,93 +621,59 @@ def _gender_stress_tip(severity: str, bracket: Optional[str]) -> Optional[dict]:
     if severity in _MILD_TIER:
         if bracket == "male":
             return {
-                "en": "There's often social pressure to be the one who 'handles it "
-                      "all' without asking for help, which quietly raises stress "
-                      "over time. Try asking for help with one specific thing this "
-                      "week - not as a last resort, but as a normal, early step.",
-                "ur": "اکثر یہ سماجی دباؤ ہوتا ہے کہ بغیر مدد مانگے 'سب کچھ سنبھالا "
-                      "جائے'، جو وقت کے ساتھ خاموشی سے تناؤ بڑھاتا ہے۔ اس ہفتے کسی ایک "
-                      "مخصوص چیز میں مدد مانگنے کی کوشش کریں - آخری حل کے طور پر نہیں، "
-                      "بلکہ ایک معمول کے، ابتدائی قدم کے طور پر۔",
+                "en": "Try asking for help with one specific thing this week "
+                      "- not as a last resort, but as a normal, early step.",
+                "ur": "اس ہفتے کسی ایک چیز میں مدد مانگیں - آخری حل کے طور پر "
+                      "نہیں، بلکہ ایک معمول کے قدم کے طور پر۔",
             }
         if bracket == "female":
             return {
-                "en": "A large share of everyday stress can come from invisible "
-                      "labour - remembering birthdays, restocking supplies, tracking "
-                      "everyone's schedules - that rarely gets acknowledged as real "
-                      "work. Try making one of these tasks visible: write it down "
-                      "and hand it to someone else explicitly, rather than just "
-                      "doing it quietly again.",
-                "ur": "روزمرہ کے تناؤ کا ایک بڑا حصہ غیر مرئی محنت سے آ سکتا ہے - "
-                      "سالگرہیں یاد رکھنا، سامان کا خیال رکھنا، سب کا شیڈول ٹریک "
-                      "کرنا - جسے شاذ و نادر ہی حقیقی کام تسلیم کیا جاتا ہے۔ ان میں "
-                      "سے کسی ایک کام کو نظر آنے والا بنانے کی کوشش کریں: اسے لکھ کر "
-                      "واضح طور پر کسی اور کے سپرد کریں، بجائے اس کے کہ خاموشی سے "
-                      "دوبارہ خود کریں۔",
+                "en": "Try making one invisible task visible: write it down "
+                      "and hand it to someone else explicitly, rather than "
+                      "quietly doing it again.",
+                "ur": "کوئی ایک غیر مرئی کام نظر آنے والا بنائیں: اسے لکھ کر "
+                      "واضح طور پر کسی اور کے سپرد کریں، خاموشی سے دوبارہ خود "
+                      "نہ کریں۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "Stress from navigating unsupportive systems - paperwork, "
-                      "misgendering, having to explain yourself repeatedly - is "
-                      "real, cumulative load, even when each incident seems small on "
-                      "its own. Where possible, try identifying which spaces in your "
-                      "week are genuinely low-friction, and protect more time there.",
-                "ur": "غیر معاون نظاموں سے نمٹنے کا تناؤ - کاغذی کارروائی، غلط جنس "
-                      "سے پکارا جانا، بار بار خود کو سمجھانا پڑنا - ایک حقیقی، جمع "
-                      "ہونے والا بوجھ ہے، چاہے ہر واقعہ اکیلا چھوٹا لگے۔ جہاں ممکن "
-                      "ہو، اپنے ہفتے میں یہ پہچاننے کی کوشش کریں کہ کون سی جگہیں "
-                      "حقیقتاً کم دباؤ والی ہیں، اور وہاں مزید وقت محفوظ رکھیں۔",
+                "en": "Identify which spaces in your week are genuinely "
+                      "low-friction, and protect more time there.",
+                "ur": "اپنے ہفتے میں وہ جگہیں پہچانیں جو حقیقتاً کم دباؤ والی "
+                      "ہیں، اور وہاں مزید وقت محفوظ رکھیں۔",
             }
         return None
 
     if severity in _HIGH_TIER:
         if bracket == "male":
             return {
-                "en": "Carrying high stress silently, especially around being seen "
-                      "as a reliable provider or problem-solver, takes a real toll. "
-                      "Please talk to a mental health professional about your "
-                      "workload, and consider naming to one person close to you that "
-                      "you're stretched thin - not as an admission of failure, but "
-                      "as useful information they can act on.",
-                "ur": "خاموشی سے شدید تناؤ اٹھانا، خاص طور پر ایک قابلِ اعتماد سہارا "
-                      "یا مسئلہ حل کرنے والے کے طور پر دیکھے جانے کے دباؤ میں، حقیقی "
-                      "نقصان پہنچاتا ہے۔ براہِ کرم اپنے کام کے بوجھ پر کسی ذہنی صحت "
-                      "کے ماہر سے بات کریں، اور اپنے کسی قریبی شخص کو یہ بتانے پر "
-                      "غور کریں کہ آپ زیادہ دباؤ میں ہیں - ناکامی کے اعتراف کے طور "
-                      "پر نہیں، بلکہ ایک مفید معلومات کے طور پر جس پر وہ عمل کر "
-                      "سکیں۔",
+                "en": "Please talk to a mental health professional about your "
+                      "workload, and consider telling one close person you're "
+                      "stretched thin - it's useful information, not an "
+                      "admission of failure.",
+                "ur": "براہِ کرم اپنے کام کے بوجھ پر ذہنی صحت کے ماہر سے بات "
+                      "کریں، اور کسی قریبی شخص کو بتائیں کہ آپ زیادہ دباؤ میں "
+                      "ہیں۔",
             }
         if bracket == "female":
             return {
-                "en": "This level of stress, especially if it comes from managing "
-                      "everyone else's needs alongside your own, deserves both "
-                      "professional support and a real conversation about "
-                      "redistributing load. Please talk to a mental health "
-                      "professional, and separately, list three recurring "
-                      "responsibilities and identify who else could take over at "
-                      "least one of them permanently.",
-                "ur": "تناؤ کی یہ سطح، خاص طور پر اگر یہ اپنے ساتھ ساتھ سب کی "
-                      "ضروریات سنبھالنے سے آ رہی ہو، پیشہ ورانہ مدد اور بوجھ دوبارہ "
-                      "تقسیم کرنے پر حقیقی بات چیت دونوں کی مستحق ہے۔ براہِ کرم کسی "
-                      "ذہنی صحت کے ماہر سے بات کریں، اور الگ سے، تین بار بار آنے "
-                      "والی ذمہ داریاں فہرست کریں اور پہچانیں کہ ان میں سے کم از کم "
-                      "ایک کو مستقل طور پر کون اور سنبھال سکتا ہے۔",
+                "en": "Please talk to a mental health professional, and "
+                      "separately, list three recurring responsibilities and "
+                      "identify who else could take over at least one "
+                      "permanently.",
+                "ur": "براہِ کرم ذہنی صحت کے ماہر سے بات کریں، اور تین بار بار "
+                      "آنے والی ذمہ داریاں فہرست کر کے دیکھیں کہ کون ایک "
+                      "ذمہ داری مستقل سنبھال سکتا ہے۔",
             }
         if bracket == "nonbinary":
             return {
-                "en": "Sustained high stress from constantly navigating unsupportive "
-                      "environments is a well-documented cumulative burden. Please "
-                      "talk to a mental health professional, ideally one with "
-                      "specific experience supporting gender-diverse clients, and "
-                      "consider whether any single recurring source of friction - a "
-                      "form, a policy, a relationship - could be addressed directly "
-                      "rather than absorbed repeatedly.",
-                "ur": "غیر معاون ماحول سے مسلسل نمٹنے کی وجہ سے شدید تناؤ ایک اچھی "
-                      "طرح دستاویزی جمع ہونے والا بوجھ ہے۔ براہِ کرم کسی ذہنی صحت کے "
-                      "ماہر سے بات کریں، ترجیحاً ایسے جسے صنفی طور پر متنوع مؤکلوں کی "
-                      "مدد کا مخصوص تجربہ ہو، اور غور کریں کہ کیا رگڑ کا کوئی ایک "
-                      "بار بار آنے والا ذریعہ - کوئی فارم، پالیسی، یا تعلق - براہِ "
-                      "راست حل کیا جا سکتا ہے بجائے اسے بار بار برداشت کرنے کے۔",
+                "en": "Please talk to a mental health professional, ideally "
+                      "one with experience supporting gender-diverse clients, "
+                      "and consider whether one recurring source of friction "
+                      "could be addressed directly.",
+                "ur": "براہِ کرم ذہنی صحت کے ماہر سے بات کریں، ترجیحاً صنفی "
+                      "طور پر متنوع مؤکلوں کا تجربہ رکھنے والے سے، اور کسی بار "
+                      "بار آنے والی رگڑ کو براہِ راست حل کرنے پر غور کریں۔",
             }
         return None
 
@@ -965,44 +730,35 @@ def _fer_happy_tip(bracket: Optional[str]) -> dict:
     reading so it can be intentionally reproduced."""
     if bracket == "youth":
         return {
-            "en": "Your facial expressions leaned notably positive during this "
-                  "session - that's genuinely worth noticing. Try to identify what "
-                  "was present right before or during this session (a person, an "
-                  "activity, a break from screens) so you can intentionally build "
-                  "more of it into your week.",
-            "ur": "اس سیشن کے دوران آپ کے چہرے کے تاثرات نمایاں طور پر مثبت رہے - یہ "
-                  "واقعی نوٹ کرنے کے قابل بات ہے۔ یہ پہچاننے کی کوشش کریں کہ اس سیشن "
-                  "سے پہلے یا دوران کیا موجود تھا (کوئی شخص، سرگرمی، اسکرین سے وقفہ) "
-                  "تاکہ آپ اسے جان بوجھ کر اپنے ہفتے میں مزید شامل کر سکیں۔",
+            "en": "Your expressions leaned notably positive this session. "
+                  "Try to identify what was present beforehand (a person, "
+                  "activity, a break from screens) and build more of it "
+                  "into your week.",
+            "ur": "اس سیشن میں آپ کے تاثرات نمایاں مثبت رہے۔ پہچانیں کہ اس سے "
+                  "پہلے کیا موجود تھا اور اسے اپنے ہفتے میں مزید شامل کریں۔",
         }
     if bracket == "adult":
         return {
-            "en": "Your facial expressions leaned notably positive during this "
-                  "session - that's worth acknowledging alongside your questionnaire "
-                  "results. If this coincided with time away from work demands, it's "
-                  "a useful signal for how you might structure future breaks.",
-            "ur": "اس سیشن کے دوران آپ کے چہرے کے تاثرات نمایاں طور پر مثبت رہے - یہ "
-                  "ایک اچھی بات ہے جسے آپ کے سوالنامے کے نتائج کے ساتھ نوٹ کرنا "
-                  "چاہیے۔ اگر یہ کام کے دباؤ سے دور وقت کے ساتھ ہوا، تو یہ ایک مفید "
-                  "اشارہ ہے کہ آپ آئندہ وقفے کیسے ترتیب دے سکتے ہیں۔",
+            "en": "Your expressions leaned notably positive this session - "
+                  "worth noting alongside your questionnaire results, "
+                  "especially if it coincided with time away from work.",
+            "ur": "اس سیشن میں آپ کے تاثرات نمایاں مثبت رہے - یہ سوالنامے کے "
+                  "نتائج کے ساتھ نوٹ کرنے کے قابل ہے، خاص طور پر اگر یہ کام "
+                  "سے وقفے میں ہوا۔",
         }
     if bracket == "senior":
         return {
-            "en": "Your facial expressions leaned notably positive during this "
-                  "session - that's genuinely good to see. Whatever surrounded this "
-                  "moment - company, a familiar routine, time outdoors - is worth "
-                  "protecting and repeating regularly.",
-            "ur": "اس سیشن کے دوران آپ کے چہرے کے تاثرات نمایاں طور پر مثبت رہے - یہ "
-                  "دیکھ کر واقعی خوشی ہوئی۔ جو کچھ بھی اس لمحے کے ارد گرد تھا - "
-                  "ساتھی، جانی پہچانی روٹین، باہر کا وقت - اسے محفوظ رکھنا اور "
-                  "باقاعدگی سے دہرانا قابلِ قدر ہے۔",
+            "en": "Your expressions leaned notably positive this session. "
+                  "Whatever surrounded this moment - company, routine, time "
+                  "outdoors - is worth protecting and repeating.",
+            "ur": "اس سیشن میں آپ کے تاثرات نمایاں مثبت رہے۔ جو کچھ اس لمحے "
+                  "کے ارد گرد تھا اسے محفوظ رکھنا اور دہرانا مفید ہے۔",
         }
     return {
-        "en": "Your facial expressions leaned notably positive during this "
-              "session - that's worth acknowledging alongside your questionnaire "
-              "results.",
-        "ur": "اس سیشن کے دوران آپ کے چہرے کے تاثرات نمایاں طور پر مثبت رہے - یہ ایک "
-              "اچھی بات ہے جسے آپ کے سوالنامے کے نتائج کے ساتھ نوٹ کرنا چاہیے۔",
+        "en": "Your expressions leaned notably positive this session - "
+              "worth acknowledging alongside your questionnaire results.",
+        "ur": "اس سیشن میں آپ کے تاثرات نمایاں مثبت رہے - یہ سوالنامے کے "
+              "نتائج کے ساتھ نوٹ کرنے کے قابل ہے۔",
     }
 
 
@@ -1012,53 +768,37 @@ def _fer_negative_tip(bracket: Optional[str]) -> dict:
     which focuses on a behavioural response rather than a naming exercise."""
     if bracket == "youth":
         return {
-            "en": "A notable share of your captured expressions were negative. Try "
-                  "'affect labelling': say the feeling to yourself in one plain "
-                  "sentence, like 'I'm feeling overwhelmed about the exam' - "
-                  "research shows simply naming an emotion this specifically can "
-                  "measurably reduce its intensity within minutes.",
-            "ur": "آپ کے حاصل کردہ تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
-                  "لینا' آزمائیں: اپنے احساس کو ایک سادہ جملے میں کہیں، جیسے 'میں "
-                  "امتحان کے بارے میں مغلوب محسوس کر رہا ہوں' - تحقیق بتاتی ہے کہ "
-                  "کسی جذبے کو اس طرح واضح طور پر نام دینا چند منٹوں میں اس کی شدت "
-                  "کو نمایاں طور پر کم کر سکتا ہے۔",
+            "en": "A notable share of your expressions were negative. Try "
+                  "'affect labelling': name the feeling in one plain "
+                  "sentence - naming it this specifically can ease its "
+                  "intensity within minutes.",
+            "ur": "آپ کے تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
+                  "لینا' آزمائیں: ایک سادہ جملے میں احساس کا نام لیں - یہ "
+                  "چند منٹوں میں شدت کم کر سکتا ہے۔",
         }
     if bracket == "adult":
         return {
-            "en": "A notable share of your captured expressions were negative. Try "
-                  "'affect labelling': in one sentence, name what you're actually "
-                  "feeling and what it's about ('I'm frustrated about the deadline "
-                  "shifting again') rather than letting it stay vague. Putting a "
-                  "specific label on it, even silently, tends to lower its grip "
-                  "faster than trying to push through it unnamed.",
-            "ur": "آپ کے حاصل کردہ تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
-                  "لینا' آزمائیں: ایک جملے میں نام لیں کہ آپ اصل میں کیا محسوس کر رہے "
-                  "ہیں اور کیوں ('مجھے ڈیڈلائن دوبارہ بدلنے پر مایوسی ہو رہی ہے') "
-                  "بجائے اسے غیر واضح رہنے دینے کے۔ اسے مخصوص نام دینا، خاموشی سے ہی "
-                  "سہی، اسے بغیر نام لیے برداشت کرنے کی نسبت تیزی سے ہلکا کر دیتا ہے۔",
+            "en": "A notable share of your expressions were negative. Try "
+                  "'affect labelling': name what you're feeling and why in "
+                  "one sentence, rather than leaving it vague.",
+            "ur": "آپ کے تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
+                  "لینا' آزمائیں: ایک جملے میں نام لیں کہ کیا محسوس ہو رہا "
+                  "ہے اور کیوں۔",
         }
     if bracket == "senior":
         return {
-            "en": "A notable share of your captured expressions were negative. Try "
-                  "'affect labelling': quietly name what you're feeling in a single "
-                  "sentence - 'I'm feeling lonely this afternoon' - rather than "
-                  "letting it sit unnamed in the background. This simple naming step "
-                  "is a well-studied way to ease an emotion's intensity in the "
-                  "moment.",
-            "ur": "آپ کے حاصل کردہ تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
-                  "لینا' آزمائیں: خاموشی سے ایک جملے میں نام لیں کہ آپ کیا محسوس کر "
-                  "رہے ہیں - 'آج دوپہر مجھے تنہائی محسوس ہو رہی ہے' - بجائے اسے "
-                  "پس منظر میں بغیر نام کے چھوڑنے کے۔ یہ سادہ نام لینے کا عمل کسی "
-                  "جذبے کی شدت کو فوری طور پر کم کرنے کا ایک اچھی طرح مطالعہ شدہ "
-                  "طریقہ ہے۔",
+            "en": "A notable share of your expressions were negative. Try "
+                  "'affect labelling': quietly name what you're feeling in "
+                  "a single sentence rather than letting it sit unnamed.",
+            "ur": "آپ کے تاثرات کا ایک نمایاں حصہ منفی تھا۔ 'احساس کا نام "
+                  "لینا' آزمائیں: خاموشی سے ایک جملے میں احساس کا نام لیں۔",
         }
     return {
-        "en": "A notable share of your captured expressions were negative. A "
-              "short emotional regulation practice, like slow paced breathing or "
-              "briefly naming what you're feeling, can help in the moment.",
-        "ur": "آپ کے حاصل کردہ تاثرات کا ایک نمایاں حصہ منفی تھا۔ سست رفتار سانس "
-              "لینے یا مختصر طور پر اپنے احساس کا نام لینے جیسی جذباتی ضبط کی مشق "
-              "فوری طور پر مددگار ہو سکتی ہے۔",
+        "en": "A notable share of your expressions were negative. A short "
+              "practice, like slow breathing or naming the feeling, can "
+              "help in the moment.",
+        "ur": "آپ کے تاثرات کا ایک نمایاں حصہ منفی تھا۔ سست سانس یا احساس "
+              "کا نام لینا فوری مددگار ہو سکتا ہے۔",
     }
 
 
@@ -1070,41 +810,30 @@ def _gender_fer_negative_tip(bracket: Optional[str]) -> Optional[dict]:
     so the two stay non-overlapping."""
     if bracket == "male":
         return {
-            "en": "Negative expressions can sometimes get masked as neutral or "
-                  "flat, especially when there's pressure not to visibly react. It "
-                  "can help to check in with your body specifically - jaw, "
-                  "shoulders, hands - since physical tension often reveals feeling "
-                  "that a neutral face is hiding.",
-            "ur": "منفی تاثرات کبھی کبھار غیر جانبدار یا سپاٹ ظاہر ہو سکتے ہیں، خاص "
-                  "طور پر جب واضح ردِعمل نہ دکھانے کا دباؤ ہو۔ اپنے جسم کو خاص طور "
-                  "پر جانچنا مددگار ہو سکتا ہے - جبڑا، کندھے، ہاتھ - کیونکہ جسمانی "
-                  "تناؤ اکثر وہ احساس ظاہر کرتا ہے جسے غیر جانبدار چہرہ چھپا رہا "
-                  "ہوتا ہے۔",
+            "en": "Negative feeling can hide behind a neutral face, "
+                  "especially under pressure not to react. Check in with "
+                  "your body - jaw, shoulders, hands - for tension it may "
+                  "be masking.",
+            "ur": "منفی احساس غیر جانبدار چہرے کے پیچھے چھپ سکتا ہے۔ اپنے "
+                  "جسم کو جانچیں - جبڑا، کندھے، ہاتھ - جو تناؤ چھپا رہا "
+                  "ہو۔",
         }
     if bracket == "female":
         return {
-            "en": "When negative expressions show up alongside a busy caretaking "
-                  "load, it can be easy to keep functioning through it without "
-                  "actually addressing it. Try giving yourself explicit permission "
-                  "for five minutes today that belong only to you, with no one "
-                  "else's needs attached.",
-            "ur": "جب منفی تاثرات مصروف نگہداشت کے بوجھ کے ساتھ سامنے آئیں، تو "
-                  "اصل میں اسے حل کیے بغیر کام جاری رکھنا آسان ہو سکتا ہے۔ آج اپنے "
-                  "لیے واضح طور پر پانچ منٹ کی اجازت دینے کی کوشش کریں جو صرف آپ "
-                  "کے ہوں، جن سے کسی اور کی ضروریات وابستہ نہ ہوں۔",
+            "en": "It's easy to keep functioning through a hard feeling "
+                  "without addressing it. Give yourself explicit permission "
+                  "for five minutes today that belong only to you.",
+            "ur": "مشکل احساس کے ساتھ کام جاری رکھنا آسان ہے، لیکن اسے حل "
+                  "کیے بغیر۔ آج پانچ منٹ صرف اپنے لیے مقرر کریں۔",
         }
     if bracket == "nonbinary":
         return {
-            "en": "Negative expressions after navigating spaces that don't fully "
-                  "see you are a valid, real response, not an oversensitivity. "
-                  "Consider spending a few minutes afterward with someone or "
-                  "something explicitly affirming - a supportive friend, a "
-                  "community space - to help reset before moving on with your day.",
-            "ur": "ایسی جگہوں سے گزرنے کے بعد منفی تاثرات جو آپ کو مکمل طور پر "
-                  "تسلیم نہیں کرتیں، ایک درست، حقیقی ردِعمل ہے، ضرورت سے زیادہ "
-                  "حساسیت نہیں۔ اس کے بعد کچھ منٹ کسی ایسے شخص یا چیز کے ساتھ گزارنے "
-                  "پر غور کریں جو واضح طور پر تسلیم کرے - کوئی معاون دوست، کمیونٹی "
-                  "کی جگہ - تاکہ دن جاری رکھنے سے پہلے دوبارہ سکون مل سکے۔",
+            "en": "Negative feelings after unaffirming spaces are a valid "
+                  "response, not oversensitivity. Spend a few minutes "
+                  "afterward somewhere explicitly affirming to help reset.",
+            "ur": "غیر تسلیم کرنے والی جگہوں کے بعد منفی احساس ایک درست "
+                  "ردِعمل ہے۔ اس کے بعد کچھ منٹ کسی تسلیم کرنے والی جگہ "
+                  "گزاریں۔",
         }
     return None
 
@@ -1115,56 +844,37 @@ def _fer_sad_tip(bracket: Optional[str]) -> dict:
     as distinct actions when both fire in the same result."""
     if bracket == "youth":
         return {
-            "en": "Sadness showed up as a clear signal in your expressions during "
-                  "this session. Rather than just sitting with it, try one concrete "
-                  "step: message one person in your peer group you trust and suggest "
-                  "meeting up or calling, even briefly - social comparison online "
-                  "can quietly deepen sadness, while one real conversation tends to "
-                  "counter it.",
-            "ur": "اس سیشن کے دوران اداسی آپ کے تاثرات میں ایک واضح اشارے کے طور پر "
-                  "سامنے آئی۔ صرف اس کے ساتھ بیٹھنے کی بجائے، ایک ٹھوس قدم اٹھائیں: "
-                  "اپنے قابلِ اعتماد ہم عمر گروپ میں کسی ایک شخص کو پیغام بھیجیں اور "
-                  "ملنے یا کال کرنے کی تجویز دیں، مختصر ہی سہی - سوشل میڈیا پر موازنہ "
-                  "خاموشی سے اداسی گہری کر سکتا ہے، جبکہ ایک حقیقی گفتگو اس کا مقابلہ "
-                  "کرتی ہے۔",
+            "en": "Sadness stood out clearly this session. As one concrete "
+                  "step, message someone in your trusted circle and suggest "
+                  "meeting up or calling, even briefly.",
+            "ur": "اس سیشن میں اداسی واضح طور پر نمایاں تھی۔ ایک ٹھوس قدم "
+                  "کے طور پر کسی قابلِ اعتماد شخص کو پیغام بھیجیں اور ملنے یا "
+                  "کال کی تجویز دیں۔",
         }
     if bracket == "adult":
         return {
-            "en": "Sadness showed up as a clear signal in your expressions during "
-                  "this session. As a concrete step, before returning to your task "
-                  "list, take five minutes to identify one relationship or "
-                  "responsibility that's currently asking more of you than it's "
-                  "giving back, and write down one small change you could make to "
-                  "it this week.",
-            "ur": "اس سیشن کے دوران اداسی آپ کے تاثرات میں ایک واضح اشارے کے طور پر "
-                  "سامنے آئی۔ ایک ٹھوس قدم کے طور پر، اپنی فہرست کی طرف واپس جانے سے "
-                  "پہلے، پانچ منٹ لیں یہ پہچاننے کے لیے کہ کون سا تعلق یا ذمہ داری "
-                  "فی الحال آپ سے واپس ملنے سے کہیں زیادہ مانگ رہی ہے، اور اس میں ایک "
-                  "چھوٹی تبدیلی لکھیں جو آپ اس ہفتے کر سکتے ہیں۔",
+            "en": "Sadness stood out clearly this session. Take five "
+                  "minutes to identify one relationship or responsibility "
+                  "asking more of you than it gives back, and note one "
+                  "small change.",
+            "ur": "اس سیشن میں اداسی واضح طور پر نمایاں تھی۔ پانچ منٹ لے کر "
+                  "پہچانیں کہ کون سا تعلق یا ذمہ داری آپ سے زیادہ مانگ رہی "
+                  "ہے، اور ایک چھوٹی تبدیلی نوٹ کریں۔",
         }
     if bracket == "senior":
         return {
-            "en": "Sadness showed up as a clear signal in your expressions during "
-                  "this session. As a concrete step, pick one specific person - "
-                  "family member, old friend, or neighbour - and reach out to them "
-                  "today, even with a short message. Sadness in later life is often "
-                  "connected to reduced daily contact, and rebuilding that contact "
-                  "directly tends to help more than waiting for it to happen.",
-            "ur": "اس سیشن کے دوران اداسی آپ کے تاثرات میں ایک واضح اشارے کے طور پر "
-                  "سامنے آئی۔ ایک ٹھوس قدم کے طور پر، ایک مخصوص شخص چنیں - خاندان کا "
-                  "فرد، پرانا دوست، یا پڑوسی - اور آج ہی ان سے رابطہ کریں، مختصر پیغام "
-                  "ہی سہی۔ بڑھاپے میں اداسی اکثر روزمرہ رابطے میں کمی سے جڑی ہوتی ہے، "
-                  "اور اس رابطے کو براہِ راست دوبارہ تعمیر کرنا اس کے خود بخود ہونے کا "
-                  "انتظار کرنے سے زیادہ مددگار ثابت ہوتا ہے۔",
+            "en": "Sadness stood out clearly this session. Pick one person "
+                  "- family, an old friend, a neighbour - and reach out "
+                  "today, even briefly.",
+            "ur": "اس سیشن میں اداسی واضح طور پر نمایاں تھی۔ ایک شخص چنیں - "
+                  "خاندان، پرانا دوست، پڑوسی - اور آج ہی رابطہ کریں۔",
         }
     return {
-        "en": "Sadness showed up as a clear signal in your expressions during "
-              "this session. Taking a few minutes to acknowledge the feeling "
-              "directly, and connecting with someone you trust, can help before "
-              "it builds further.",
-        "ur": "اس سیشن کے دوران اداسی آپ کے تاثرات میں ایک واضح اشارے کے طور پر "
-              "سامنے آئی۔ چند منٹ رک کر اس احساس کو سیدھا تسلیم کرنا، اور کسی "
-              "قابلِ اعتماد شخص سے رابطہ کرنا، اسے مزید بڑھنے سے پہلے مددگار ہو "
+        "en": "Sadness stood out clearly this session. Taking a few "
+              "minutes to acknowledge it and connecting with someone you "
+              "trust can help before it builds further.",
+        "ur": "اس سیشن میں اداسی واضح طور پر نمایاں تھی۔ چند منٹ رک کر اسے "
+              "تسلیم کرنا اور کسی قابلِ اعتماد شخص سے رابطہ کرنا مددگار ہو "
               "سکتا ہے۔",
     }
 
