@@ -136,3 +136,28 @@ class AssessmentSummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Profile / Insights (range-filtered data for the Insights charts)
+# ---------------------------------------------------------------------------
+class AssessmentInsight(BaseModel):
+    """Lightweight row for the profile page's Insights charts (Overall
+    Progress + Facial Emotion Summary), returned by
+    GET /api/assessments/insights.
+
+    This intentionally excludes the fields the charts never use - raw
+    dass_q1..q21 answers, full_name, final_summary, actionable_tips - so a
+    user with a long history doesn't pay for that data on every profile
+    load. Contrast with AssessmentSubmitOut, which is the full per-session
+    detail shape returned by GET /api/assessments/{id}."""
+
+    id: uuid.UUID
+    created_at: datetime
+    assessment_mode: Literal["questionnaire", "video", "combined"]
+    final_risk_level: str
+    dass_result: Optional[DassResult] = None
+    fer_result: Optional[FerResult] = None
+
+    class Config:
+        from_attributes = True

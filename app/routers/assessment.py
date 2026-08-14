@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,6 +10,7 @@ from app.data.dass21_questions import DASS21_QUESTIONS, ANSWER_LABELS
 from app.database import get_db
 from app.models import Assessment
 from app.schemas import (
+    AssessmentInsight,
     AssessmentSubmitIn,
     AssessmentSubmitOut,
     AssessmentSummary,
@@ -18,6 +21,10 @@ from app.services.dass_scoring import score_dass21
 from app.services.risk_engine import compute_overall_risk, generate_actionable_tips
 
 router = APIRouter(prefix="/api", tags=["assessment"])
+
+# Maps the profile page's time-range filter keys to a day count. "all" is
+# handled separately below (no cutoff applied at all).
+_INSIGHTS_RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90}
 
 
 def _build_response(
@@ -151,6 +158,106 @@ def list_assessments(
         .all()
     )
     return records
+
+
+# NOTE: this must stay registered ABOVE GET /assessments/{assessment_id}.
+# FastAPI matches routes in declaration order, and "insights" would
+# otherwise be swallowed by the {assessment_id} path (and fail UUID
+# validation) before ever reaching this one.
+@router.get("/assessments/insights", response_model=list[AssessmentInsight])
+def get_assessments_insights(
+    range: Literal["7d", "30d", "90d", "all"] = "30d",
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+):
+    """Range-filtered, column-trimmed data for the profile page's Insights
+    charts (Overall Progress + Facial Emotion Summary).
+
+    Replaces the previous frontend pattern of calling
+    GET /api/assessments/{id} once per session - an N+1 fan-out that also
+    pulled every column (all 21 raw dass_qN answers, full_name,
+    final_summary, actionable_tips) for every past session on every
+    profile load, none of which the charts use.
+
+    Two things keep this fast as history grows:
+    - The date-range cutoff is applied in the SQL WHERE clause, not by
+      fetching every session and filtering client-side.
+    - Only the ~15 columns the charts actually read are selected (see
+      AssessmentInsight), so the heavy columns above never leave the DB.
+
+    A composite index on (clerk_user_id, created_at) is recommended so
+    this stays a fast index scan rather than a sequential scan as history
+    grows.
+    """
+    query = db.query(
+        Assessment.id,
+        Assessment.created_at,
+        Assessment.assessment_mode,
+        Assessment.final_risk_level,
+        Assessment.dass_depression_score,
+        Assessment.dass_anxiety_score,
+        Assessment.dass_stress_score,
+        Assessment.dass_depression_severity,
+        Assessment.dass_anxiety_severity,
+        Assessment.dass_stress_severity,
+        Assessment.fer_frames_captured,
+        Assessment.fer_frames_analyzed,
+        Assessment.fer_angry,
+        Assessment.fer_disgust,
+        Assessment.fer_fear,
+        Assessment.fer_happy,
+        Assessment.fer_sad,
+        Assessment.fer_surprise,
+        Assessment.fer_neutral,
+        Assessment.fer_dominant_emotion,
+    ).filter(Assessment.clerk_user_id == user_id)
+
+    if range != "all":
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_INSIGHTS_RANGE_DAYS[range])
+        query = query.filter(Assessment.created_at >= cutoff)
+
+    rows = query.order_by(Assessment.created_at.asc()).all()
+
+    results: list[AssessmentInsight] = []
+    for row in rows:
+        dass_result = None
+        if row.dass_depression_score is not None:
+            dass_result = DassResult(
+                depression_score=row.dass_depression_score,
+                anxiety_score=row.dass_anxiety_score,
+                stress_score=row.dass_stress_score,
+                depression_severity=row.dass_depression_severity,
+                anxiety_severity=row.dass_anxiety_severity,
+                stress_severity=row.dass_stress_severity,
+            )
+
+        fer_result = None
+        if row.fer_frames_analyzed is not None:
+            fer_result = FerResult(
+                frames_captured=row.fer_frames_captured,
+                frames_analyzed=row.fer_frames_analyzed,
+                angry=row.fer_angry,
+                disgust=row.fer_disgust,
+                fear=row.fer_fear,
+                happy=row.fer_happy,
+                sad=row.fer_sad,
+                surprise=row.fer_surprise,
+                neutral=row.fer_neutral,
+                dominant_emotion=row.fer_dominant_emotion,
+            )
+
+        results.append(
+            AssessmentInsight(
+                id=row.id,
+                created_at=row.created_at,
+                assessment_mode=row.assessment_mode,
+                final_risk_level=row.final_risk_level,
+                dass_result=dass_result,
+                fer_result=fer_result,
+            )
+        )
+
+    return results
 
 
 @router.get("/assessments/{assessment_id}", response_model=AssessmentSubmitOut)
