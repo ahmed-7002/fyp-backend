@@ -1,16 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from io import BytesIO
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
-from openpyxl import Workbook
-from openpyxl.chart import BarChart, LineChart, Reference
-from openpyxl.chart.marker import DataPoint
-from openpyxl.chart.shapes import GraphicalProperties
-from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -33,45 +25,6 @@ router = APIRouter(prefix="/api", tags=["assessment"])
 # Maps the profile page's time-range filter keys to a day count. "all" is
 # handled separately below (no cutoff applied at all).
 _INSIGHTS_RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90}
-
-# Same teal used for the header row/chart accents in the old frontend
-# exceljs export (and the app's --color-teal-dark), so the downloaded
-# workbook still matches the app's look now that generation has moved
-# server-side.
-_HEADER_FILL = PatternFill(start_color="FF2B6F6B", end_color="FF2B6F6B", fill_type="solid")
-_HEADER_FONT = Font(bold=True, color="FFFFFFFF")
-_NOTE_FONT = Font(bold=True, color="FF1E4F4C")
-
-# Same swatches as Profile.jsx's EMOTION_COLORS (just without the leading
-# "#", which openpyxl's solidFill wants), so the exported bar chart's
-# per-emotion colors match what's on screen in the app. Applied as an
-# explicit per-point fill below rather than relying on Excel's automatic
-# "vary colors by point" chart styling - that auto-coloring is a purely
-# visual/theme behavior that desktop Excel applies but that other
-# renderers (Excel Mobile, Google Sheets, etc.) don't reliably reproduce,
-# which is why bars can silently render as a single flat color there. A
-# fill baked directly into each data point's XML renders identically
-# everywhere.
-_EMOTION_COLORS = {
-    "happy": "2B6F6B",
-    "neutral": "8C7AA9",
-    "surprise": "4A8A85",
-    "sad": "C97B63",
-    "angry": "B0503C",
-    "fear": "9A6E8C",
-    "disgust": "7A5A4A",
-}
-_FALLBACK_BAR_COLOR = "8C7AA9"  # colors.lavender - same fallback used elsewhere in the app
-
-
-def _style_header_row(ws: Worksheet, row: int = 1) -> None:
-    """Bolds + teal-fills a worksheet's header row, mirroring the
-    headerRow.font/headerRow.fill styling the frontend used to apply via
-    exceljs."""
-    for cell in ws[row]:
-        cell.font = _HEADER_FONT
-        cell.fill = _HEADER_FILL
-        cell.alignment = Alignment(horizontal="center")
 
 
 def _build_response(
@@ -207,21 +160,24 @@ def list_assessments(
     return records
 
 
-def _fetch_insight_rows(
-    db: Session,
-    user_id: str,
-    range_key: Literal["7d", "30d", "90d", "all"],
-) -> list[AssessmentInsight]:
+# NOTE: this must stay registered ABOVE GET /assessments/{assessment_id}.
+# FastAPI matches routes in declaration order, and "insights" would
+# otherwise be swallowed by the {assessment_id} path (and fail UUID
+# validation) before ever reaching this one.
+@router.get("/assessments/insights", response_model=list[AssessmentInsight])
+def get_assessments_insights(
+    range: Literal["7d", "30d", "90d", "all"] = "30d",
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+):
     """Range-filtered, column-trimmed data for the profile page's Insights
-    charts (Overall Progress + Facial Emotion Summary), and now also for
-    the server-side Excel export (GET /assessments/export/excel) - both
-    need the exact same rows, so this is the one place that query lives.
+    charts (Overall Progress + Facial Emotion Summary).
 
     Replaces the previous frontend pattern of calling
     GET /api/assessments/{id} once per session - an N+1 fan-out that also
     pulled every column (all 21 raw dass_qN answers, full_name,
     final_summary, actionable_tips) for every past session on every
-    profile load, none of which the charts (or the export) use.
+    profile load, none of which the charts use.
 
     Two things keep this fast as history grows:
     - The date-range cutoff is applied in the SQL WHERE clause, not by
@@ -256,8 +212,8 @@ def _fetch_insight_rows(
         Assessment.fer_dominant_emotion,
     ).filter(Assessment.clerk_user_id == user_id)
 
-    if range_key != "all":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=_INSIGHTS_RANGE_DAYS[range_key])
+    if range != "all":
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_INSIGHTS_RANGE_DAYS[range])
         query = query.filter(Assessment.created_at >= cutoff)
 
     rows = query.order_by(Assessment.created_at.asc()).all()
@@ -302,202 +258,6 @@ def _fetch_insight_rows(
         )
 
     return results
-
-
-def _progress_rows(rows: list[AssessmentInsight]) -> list[tuple[str, str, int, int, int]]:
-    """Mirrors Profile.jsx's old `progressData` derivation: only
-    questionnaire/combined sessions that carry a DASS-21 result, one row
-    per session with Date, Time, Depression, Anxiety, Stress. `rows` is
-    already oldest-first (see _fetch_insight_rows' ORDER BY), so the
-    output - and therefore the exported "Trend Data" sheet and its line
-    chart - reads chronologically top to bottom."""
-    out: list[tuple[str, str, int, int, int]] = []
-    for r in rows:
-        if r.assessment_mode not in ("questionnaire", "combined") or r.dass_result is None:
-            continue
-        created = r.created_at
-        out.append(
-            (
-                created.strftime("%b %d, %Y"),
-                created.strftime("%I:%M %p"),
-                r.dass_result.depression_score,
-                r.dass_result.anxiety_score,
-                r.dass_result.stress_score,
-            )
-        )
-    return out
-
-
-def _emotion_rows(rows: list[AssessmentInsight]) -> list[tuple[str, int]]:
-    """Mirrors Profile.jsx's old `emotionData` derivation: counts how many
-    video/combined sessions had each emotion as their dominant one."""
-    counts: dict[str, int] = {}
-    for r in rows:
-        if r.assessment_mode not in ("video", "combined"):
-            continue
-        if r.fer_result is None or r.fer_result.frames_analyzed <= 0:
-            continue
-        emo = r.fer_result.dominant_emotion
-        counts[emo] = counts.get(emo, 0) + 1
-    return [(emo.capitalize(), count) for emo, count in counts.items()]
-
-
-# NOTE: this must stay registered ABOVE GET /assessments/{assessment_id}.
-# FastAPI matches routes in declaration order, and "insights" would
-# otherwise be swallowed by the {assessment_id} path (and fail UUID
-# validation) before ever reaching this one.
-@router.get("/assessments/insights", response_model=list[AssessmentInsight])
-def get_assessments_insights(
-    range: Literal["7d", "30d", "90d", "all"] = "30d",
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user),
-):
-    """Range-filtered, column-trimmed data for the profile page's Insights
-    charts (Overall Progress + Facial Emotion Summary). See
-    _fetch_insight_rows for the query itself, which this now just calls
-    directly - it's also reused by GET /assessments/export/excel below."""
-    return _fetch_insight_rows(db, user_id, range)
-
-
-# Also registered above GET /assessments/{assessment_id} for the same
-# routing reason as /assessments/insights above: "/assessments/export/excel"
-# is a distinct two-segment path so it wouldn't actually collide with the
-# single-segment {assessment_id} route either way, but keeping every
-# static Assessment sub-route declared before the catch-all UUID route
-# keeps this file's ordering easy to reason about.
-@router.get("/assessments/export/excel")
-def export_assessments_excel(
-    range: Literal["7d", "30d", "90d", "all"] = "30d",
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user),
-):
-    """Builds a .xlsx with the same range-filtered data as
-    GET /assessments/insights, using openpyxl instead of the old frontend
-    exceljs flow.
-
-    Three sheets:
-    - "Trend Data": one row per questionnaire/combined session (Date,
-      Time, Depression, Anxiety, Stress) - the raw numbers behind the
-      Overall Progress chart.
-    - "Emotion Data": one row per dominant emotion (Emotion, Count) - the
-      raw numbers behind the Facial Emotion Summary chart.
-    - "Charts": a real openpyxl LineChart and BarChart, built with
-      Reference()s that point at the two sheets above rather than any
-      pasted-in image. That's the whole point of moving this
-      server-side - opening the download in Excel and editing a score in
-      "Trend Data" redraws the line chart on "Charts", which a rasterized
-      PNG (the old frontend approach) could never do.
-
-    Reuses _fetch_insight_rows so the numbers in this download always
-    match what the profile page's own Insights charts are currently
-    showing for the same `range`.
-    """
-    insight_rows = _fetch_insight_rows(db, user_id, range)
-    progress_rows = _progress_rows(insight_rows)
-    emotion_rows = _emotion_rows(insight_rows)
-
-    wb = Workbook()
-
-    # --- Sheet 1: Trend Data ------------------------------------------
-    trend_ws = wb.active
-    trend_ws.title = "Trend Data"
-    trend_ws.append(["Date", "Time", "Depression", "Anxiety", "Stress"])
-    for row in progress_rows:
-        trend_ws.append(list(row))
-    _style_header_row(trend_ws)
-    for col, width in zip("ABCDE", (14, 12, 13, 13, 13)):
-        trend_ws.column_dimensions[col].width = width
-
-    # --- Sheet 2: Emotion Data -----------------------------------------
-    emotion_ws = wb.create_sheet("Emotion Data")
-    emotion_ws.append(["Emotion", "Count"])
-    for row in emotion_rows:
-        emotion_ws.append(list(row))
-    _style_header_row(emotion_ws)
-    for col, width in zip("AB", (14, 10)):
-        emotion_ws.column_dimensions[col].width = width
-
-    # --- Sheet 3: Charts -------------------------------------------------
-    # Built from Reference()s into the two sheets above, not images - these
-    # stay live, editable Excel chart objects once opened.
-    charts_ws = wb.create_sheet("Charts")
-
-    if progress_rows:
-        last_row = 1 + len(progress_rows)
-        line_chart = LineChart()
-        line_chart.title = "Overall Progress"
-        line_chart.style = 2
-        line_chart.y_axis.title = "Score"
-        line_chart.x_axis.title = "Date"
-        line_chart.width = 24
-        line_chart.height = 11
-        data = Reference(trend_ws, min_col=3, max_col=5, min_row=1, max_row=last_row)
-        categories = Reference(trend_ws, min_col=1, min_row=2, max_row=last_row)
-        line_chart.add_data(data, titles_from_data=True)
-        line_chart.set_categories(categories)
-        for series in line_chart.series:
-            series.smooth = False
-        charts_ws.add_chart(line_chart, "A1")
-    else:
-        charts_ws["A1"] = "No question-based sessions in this range yet."
-        charts_ws["A1"].font = _NOTE_FONT
-
-    if emotion_rows:
-        last_row = 1 + len(emotion_rows)
-        bar_chart = BarChart()
-        bar_chart.type = "col"
-        bar_chart.title = "Facial Emotion Summary"
-        bar_chart.style = 10
-        bar_chart.y_axis.title = "Sessions"
-        bar_chart.x_axis.title = "Emotion"
-        bar_chart.width = 24
-        bar_chart.height = 11
-        data = Reference(emotion_ws, min_col=2, min_row=1, max_row=last_row)
-        categories = Reference(emotion_ws, min_col=1, min_row=2, max_row=last_row)
-        bar_chart.add_data(data, titles_from_data=True)
-        bar_chart.set_categories(categories)
-
-        # Explicit per-bar fill, keyed off each row's emotion name, rather
-        # than Excel's "vary colors by point" auto-styling (see the
-        # _EMOTION_COLORS comment above for why).
-        series = bar_chart.series[0]
-        series.data_points = [
-            DataPoint(
-                idx=i,
-                spPr=GraphicalProperties(
-                    solidFill=_EMOTION_COLORS.get(emotion.lower(), _FALLBACK_BAR_COLOR)
-                ),
-            )
-            for i, (emotion, _count) in enumerate(emotion_rows)
-        ]
-
-        charts_ws.add_chart(bar_chart, "A22")
-    else:
-        charts_ws["A22"] = "No video sessions in this range yet."
-        charts_ws["A22"].font = _NOTE_FONT
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-
-    filename = f"mindful-checkin-insights-{range}.xlsx"
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            # This endpoint is a plain GET with the same URL every time a
-            # given range is picked (e.g. every "range=30d" download hits
-            # the exact same path+query), which makes it a prime target
-            # for a browser - especially mobile browsers - or any
-            # intermediate proxy/CDN to cache and simply replay on the
-            # next click instead of re-running the query. These headers
-            # tell every hop along the way this response must never be
-            # reused, so each click always reflects the latest data.
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-        },
-    )
 
 
 @router.get("/assessments/{assessment_id}", response_model=AssessmentSubmitOut)

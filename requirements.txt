@@ -36,8 +36,6 @@ Pillow==11.0.0
 # native voice for the selected language - see app/routers/tts.py) ---------
 gTTS==2.5.4
 
-openpyxl>=3.1.5
-
 # --- Optional / advanced: only needed if you train your OWN model later ---
 # via training/train_fer_model.py instead of using the bundled `fer` model.
 # scikit-learn==1.5.2
