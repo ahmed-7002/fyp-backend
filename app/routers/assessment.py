@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.chart.marker import DataPoint
+from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session
@@ -39,6 +41,27 @@ _INSIGHTS_RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90}
 _HEADER_FILL = PatternFill(start_color="FF2B6F6B", end_color="FF2B6F6B", fill_type="solid")
 _HEADER_FONT = Font(bold=True, color="FFFFFFFF")
 _NOTE_FONT = Font(bold=True, color="FF1E4F4C")
+
+# Same swatches as Profile.jsx's EMOTION_COLORS (just without the leading
+# "#", which openpyxl's solidFill wants), so the exported bar chart's
+# per-emotion colors match what's on screen in the app. Applied as an
+# explicit per-point fill below rather than relying on Excel's automatic
+# "vary colors by point" chart styling - that auto-coloring is a purely
+# visual/theme behavior that desktop Excel applies but that other
+# renderers (Excel Mobile, Google Sheets, etc.) don't reliably reproduce,
+# which is why bars can silently render as a single flat color there. A
+# fill baked directly into each data point's XML renders identically
+# everywhere.
+_EMOTION_COLORS = {
+    "happy": "2B6F6B",
+    "neutral": "8C7AA9",
+    "surprise": "4A8A85",
+    "sad": "C97B63",
+    "angry": "B0503C",
+    "fear": "9A6E8C",
+    "disgust": "7A5A4A",
+}
+_FALLBACK_BAR_COLOR = "8C7AA9"  # colors.lavender - same fallback used elsewhere in the app
 
 
 def _style_header_row(ws: Worksheet, row: int = 1) -> None:
@@ -433,6 +456,21 @@ def export_assessments_excel(
         categories = Reference(emotion_ws, min_col=1, min_row=2, max_row=last_row)
         bar_chart.add_data(data, titles_from_data=True)
         bar_chart.set_categories(categories)
+
+        # Explicit per-bar fill, keyed off each row's emotion name, rather
+        # than Excel's "vary colors by point" auto-styling (see the
+        # _EMOTION_COLORS comment above for why).
+        series = bar_chart.series[0]
+        series.data_points = [
+            DataPoint(
+                idx=i,
+                spPr=GraphicalProperties(
+                    solidFill=_EMOTION_COLORS.get(emotion.lower(), _FALLBACK_BAR_COLOR)
+                ),
+            )
+            for i, (emotion, _count) in enumerate(emotion_rows)
+        ]
+
         charts_ws.add_chart(bar_chart, "A22")
     else:
         charts_ws["A22"] = "No video sessions in this range yet."
