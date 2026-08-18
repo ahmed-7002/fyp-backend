@@ -484,7 +484,19 @@ def export_assessments_excel(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # This endpoint is a plain GET with the same URL every time a
+            # given range is picked (e.g. every "range=30d" download hits
+            # the exact same path+query), which makes it a prime target
+            # for a browser - especially mobile browsers - or any
+            # intermediate proxy/CDN to cache and simply replay on the
+            # next click instead of re-running the query. These headers
+            # tell every hop along the way this response must never be
+            # reused, so each click always reflects the latest data.
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
     )
 
 
